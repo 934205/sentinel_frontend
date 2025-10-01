@@ -1,0 +1,8 @@
+const TRIANGLE_POINT_A = { latitude: 8.3372614, longitude: 77.5669758 }; // A
+const TRIANGLE_POINT_B = { latitude: 8.3351901, longitude: 77.5682358 }; // B
+const TRIANGLE_POINT_C = { latitude: 8.3360539, longitude: 77.5691025 }; // C
+
+-------College zone----------
+TRIANGLE_POINT_A = 8.687909, 77.725490
+TRIANGLE_POINT_B = 8.686264, 77.727265
+TRIANGLE_POINT_C = 8.686281, 77.725146
