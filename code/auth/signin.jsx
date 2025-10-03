@@ -484,6 +484,7 @@ const Login = ({ navigation }) => {
 
       if (sim > 0.2) {
         await AsyncStorage.setItem("user", JSON.stringify(json.student));
+        Alert.alert(" Matched", `Similarity Score: ${sim.toFixed(3)}`);
         navigation.replace("Tabs", { screen: "Home" });
       } else {
         Alert.alert("❌ Not Matched", `Similarity Score: ${sim.toFixed(3)}`);
