@@ -35,4 +35,5 @@ class MainApplication : Application(), ReactApplication {
     super.onCreate()
     loadReactNative(this)
   }
+
 }

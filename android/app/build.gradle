@@ -120,4 +120,5 @@ dependencies {
     implementation(project(':react-native-push-notification')) {
     exclude group: 'com.android.support'
     }
+
 }

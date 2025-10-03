@@ -18,4 +18,35 @@ buildscript {
     }
 }
 
+//for background fetch pacakge
+
+// allprojects {
+//     repositories {
+//         maven {
+//             url("${project(':react-native-background-fetch').projectDir}/libs")
+//         }
+// }
+// }
+
+
+
+// for react-native-background-geolocation
+allprojects {
+    repositories {
+        mavenLocal()
+        // Required for react-native-background-geolocation
+        maven { url("${project(':react-native-background-geolocation').projectDir}/libs") }
+        maven { url 'https://developer.huawei.com/repo/' }
+        google()
+        mavenCentral()
+        jcenter()
+
+        // Required for react-native-background-fetch
+        maven {
+             url("${project(':react-native-background-fetch').projectDir}/libs")
+         }
+    }
+}
+
+
 apply plugin: "com.facebook.react.rootproject"

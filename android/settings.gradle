@@ -4,3 +4,8 @@ extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autoli
 rootProject.name = 'sentinel'
 include ':app'
 includeBuild('../node_modules/@react-native/gradle-plugin')
+
+
+// for background fetch package
+include ':react-native-background-fetch'
+project(':react-native-background-fetch').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-background-fetch/android')
