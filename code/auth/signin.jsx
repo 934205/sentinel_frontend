@@ -558,59 +558,67 @@ const Login = ({ navigation }) => {
     return dot / (magA * magB);
   };
 
-  return (<ScrollView contentContainerStyle={styles.container}>
-    {checkUser ? (
-      <ActivityIndicator size="large" color="#00f" style={{ marginTop: 20 }} />
-    ) : (
-      <> <Text style={styles.title}> Face Verification </Text>
-
-        
-        <TextInput
-          style={styles.input}
-          placeholder="Enter Register Number"
-          value={regNo}
-          onChangeText={setRegNo}
-          keyboardType="numeric"
-        />
-
-        <View style={styles.buttonWrapper}>
-          <Pressable
-            onPress={captureFromCamera}
-            style={[styles.customButton, loading && styles.disabledButton]}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>Capture Your Face</Text>
-          </Pressable>
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      {checkUser ? (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <Image
+            source={require("../../assets/images/android-icon-foreground.png")}
+            style={{ height: 400, width: 400 }}
+          />
+          <Text style={{ marginTop: 10, fontSize: 18, color: "#333" }}>Welcome Back!</Text>
         </View>
+      ) : (
+        <View style={{ width: "100%", alignItems: "center" }}>
+          <Text style={styles.title}>Face Verification</Text>
 
-        {userFaceUri && (
-          <>
-            <Text style={styles.label}>Captured Face:</Text>
-            <Image source={{ uri: userFaceUri }} style={styles.image} />
-          </>
-        )}
+          <TextInput
+            style={styles.input}
+            placeholder="Enter Register Number"
+            value={regNo}
+            onChangeText={setRegNo}
+            keyboardType="numeric"
+          />
 
-        {dbimage && (
-          <>
-            <Text style={styles.label}>Reference Face (from DB):</Text>
-            <Image source={{ uri: dbimage }} style={styles.image} />
-          </>
-        )}
+          <View style={{ width: "100%", alignItems: "center", marginVertical: 10 }}>
+            <Pressable
+              onPress={captureFromCamera}
+              style={[styles.customButton, loading && styles.disabledButton]}
+              disabled={loading}
+            >
+              <Text style={styles.buttonText}>Capture Your Face</Text>
+            </Pressable>
+          </View>
 
-        <View style={styles.buttonWrapper}>
-          <Pressable
-            style={[styles.customButton, (!userEmbedding || loading) && styles.disabledButton]}
-            onPress={verifyFace}
-            disabled={!userEmbedding || loading}
-          >
-            <Text style={styles.buttonText}>Verify Face</Text>
-          </Pressable>
+          {userFaceUri && (
+            <View style={{ alignItems: "center" }}>
+              <Text style={styles.label}>Captured Face:</Text>
+              <Image source={{ uri: userFaceUri }} style={styles.image} />
+            </View>
+          )}
+
+          {dbimage && (
+            <View style={{ alignItems: "center" }}>
+              <Text style={styles.label}>Reference Face (from DB):</Text>
+              <Image source={{ uri: dbimage }} style={styles.image} />
+            </View>
+          )}
+
+          <View style={{ width: "100%", alignItems: "center", marginVertical: 10 }}>
+            <Pressable
+              onPress={verifyFace}
+              style={[styles.customButton, (!userEmbedding || loading) && styles.disabledButton]}
+              disabled={!userEmbedding || loading}
+            >
+              <Text style={styles.buttonText}>Verify Face</Text>
+            </Pressable>
+          </View>
+
+          {loading && <ActivityIndicator size="large" color="#007bff" style={{ marginTop: 20 }} />}
         </View>
+      )}
+    </ScrollView>
 
-        {loading && <ActivityIndicator size="large" color="#00f" style={{ marginTop: 20 }} />}
-      </>
-    )}
-  </ScrollView>
 
 
   );
