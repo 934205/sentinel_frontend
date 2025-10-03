@@ -719,7 +719,16 @@ PushNotification.configure({
 });
 
 const notify = (title, message) => {
-  PushNotification.localNotification({ title, message });
+  PushNotification.localNotification({
+    channelId: "sentinel-shield", // must match created channel
+    title: title,
+    message: message,
+    smallIcon: "ic_notification", // from drawable
+    playSound: true,
+    soundName: "default",
+    importance: "high",
+    vibrate: true,
+  });
 };
 
 // ---------------- Core Location Tracking ----------------

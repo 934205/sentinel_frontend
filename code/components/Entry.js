@@ -111,8 +111,8 @@ const configurePushNotifications = () => {
   if (Platform.OS === "android") {
     PushNotification.createChannel(
       {
-        channelId: "default-channel-id",
-        channelName: "Default Channel",
+        channelId: "sentinel-shield",
+        channelName: "Sentinel Shield",
         importance: 4, // HIGH importance
       },
       (created) => console.log("Channel created:", created)
