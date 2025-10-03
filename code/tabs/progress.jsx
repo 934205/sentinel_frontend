@@ -34,7 +34,10 @@ const ProgressScreen = () => {
 
       setLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/location/attendance/${user.reg_no}`);
+
+        console.log(API_BASE_URL);
+
+        const response = await fetch(`${API_BASE_URL}/location/attendance/reg_no=${user.reg_no}`);
         const data = await response.json();
 
         if (!response.ok) throw new Error(data.error || "Failed to fetch attendance");
