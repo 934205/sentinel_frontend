@@ -7,23 +7,23 @@ import BackgroundFetch from "react-native-background-fetch";
 
 
 //---------------- Headless JS Task (for background fetch packge) ----------------
-const backgroundFetchHeadlessTask = async (event) => {
-  console.log("[BackgroundFetch HeadlessTask] start:", event);
+// const backgroundFetchHeadlessTask = async (event) => {
+//   console.log("[BackgroundFetch HeadlessTask] start:", event);
 
-  try {
-    // Import your location tracker function
-    const { trackLocation } = require("./code/components/Tracking");
-    await trackLocation(); // call the same logic as in foreground
-  } catch (err) {
-    console.error("Headless task error:", err);
-  }
+//   try {
+//     // Import your location tracker function
+//     const { trackLocation } = require("./code/components/Tracking");
+//     await trackLocation(); // call the same logic as in foreground
+//   } catch (err) {
+//     console.error("Headless task error:", err);
+//   }
 
-  // Finish the fetch
-  BackgroundFetch.finish(event.taskId);
-};
+//   // Finish the fetch
+//   BackgroundFetch.finish(event.taskId);
+// };
 
-// Register Headless Task
-BackgroundFetch.registerHeadlessTask(backgroundFetchHeadlessTask);
+// // Register Headless Task
+// BackgroundFetch.registerHeadlessTask(backgroundFetchHeadlessTask);
 
 
 

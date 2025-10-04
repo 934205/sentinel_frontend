@@ -454,6 +454,8 @@ const Login = ({ navigation }) => {
 
     setLoading(true);
     try {
+      console.log(API_BASE_URL);
+      
       const res = await fetch(`${API_BASE_URL}/location/signin?reg_no=${regNo}`);
       const json = await res.json();
 
