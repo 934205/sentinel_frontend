@@ -379,7 +379,6 @@ const Login = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [regNo, setRegNo] = useState("");
   const [checkUser, setCheckUser] = useState(true);
-  const [dbimage, setDbImage] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -456,12 +455,12 @@ const Login = ({ navigation }) => {
     try {
       console.log(API_BASE_URL);
       
+      
       const res = await fetch(`${API_BASE_URL}/location/signin?reg_no=${regNo}`);
       const json = await res.json();
 
       if (!json.success) throw new Error("No image URL from backend");
 
-      setDbImage(json.student.face_url);
       console.log("Backend face_url:", json.student.face_url);
 
       // Download backend image to temp file
@@ -486,7 +485,6 @@ const Login = ({ navigation }) => {
 
       if (sim > 0.2) {
         await AsyncStorage.setItem("user", JSON.stringify(json.student));
-        Alert.alert(" Matched", `Similarity Score: ${sim.toFixed(3)}`);
         navigation.replace("Tabs", { screen: "Home" });
       } else {
         Alert.alert("❌ Not Matched", `Similarity Score: ${sim.toFixed(3)}`);
@@ -600,12 +598,6 @@ const Login = ({ navigation }) => {
             </View>
           )}
 
-          {dbimage && (
-            <View style={{ alignItems: "center" }}>
-              <Text style={styles.label}>Reference Face (from DB):</Text>
-              <Image source={{ uri: dbimage }} style={styles.image} />
-            </View>
-          )}
 
           <View style={{ width: "100%", alignItems: "center", marginVertical: 10 }}>
             <Pressable

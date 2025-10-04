@@ -12,7 +12,6 @@ import {
   Platform,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
-import Geolocation from "react-native-geolocation-service";
 import { useTheme } from "../components/ThemeContext";
 import Header from "../components/Header";
 
@@ -40,69 +39,15 @@ const ProfileScreen = ({ navigation }) => {
     Alert.alert("🚨 Emergency Alert", "An alert has been sent to the authorities.");
   };
 
-  const requestLocationPermission = async () => {
-    if (Platform.OS === "android") {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        {
-          title: "Location Permission",
-          message: "This app needs access to your location for safety tracking.",
-          buttonNeutral: "Ask Me Later",
-          buttonNegative: "Cancel",
-          buttonPositive: "OK",
-        }
-      );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    } 
-    return true; // iOS automatically prompts
-  };
-
-  const stopLocationTracking = () => {
-    if (global.locationInterval) {
-      clearInterval(global.locationInterval);
-      global.locationInterval = null;
-      console.log("✅ Location interval cleared.");
-    }
-  };
 
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem("user");
-      stopLocationTracking();
       navigation.replace("login");
     } catch (error) {
       console.log("❌ Error during logout:", error);
     }
   };
-
-  // Example of starting location updates
-  const startLocationTracking = async () => {
-    const hasPermission = await requestLocationPermission();
-    if (!hasPermission) return Alert.alert("Permission denied", "Enable location to track.");
-
-    if (global.locationInterval) {
-      clearInterval(global.locationInterval);
-    }
-
-    // Track location every 10 seconds
-    global.locationInterval = setInterval(() => {
-      Geolocation.getCurrentPosition(
-        (position) => {
-          console.log("Current location:", position.coords);
-          // You can send this to backend if needed
-        },
-        (error) => {
-          console.error("Location error:", error);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    }, 10000);
-  };
-
-  useEffect(() => {
-    startLocationTracking();
-    return () => stopLocationTracking();
-  }, []);
 
   return (
     <ScrollView

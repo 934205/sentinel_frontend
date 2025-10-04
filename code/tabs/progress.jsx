@@ -35,8 +35,6 @@ const ProgressScreen = () => {
       setLoading(true);
       try {
 
-        console.log(API_BASE_URL);
-
         const response = await fetch(`${API_BASE_URL}/location/attendance/reg_no=${user.reg_no}`);
         const data = await response.json();
 
