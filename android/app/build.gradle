@@ -92,6 +92,13 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+
+        release {
+            storeFile file('sentinel.keystore')
+            storePassword 'sentinel'
+            keyAlias 'sentinel'
+            keyPassword 'sentinel'
+        }
     }
     buildTypes {
         debug {
