@@ -15,10 +15,17 @@ function parsePoint(str, fallback) {
 // };
 
 //College Region
+// export const TRIANGLE_POINTS = {
+//   A: parsePoint(process.env.TRIANGLE_POINT_A, { latitude: 8.688042, longitude: 77.725464 }),
+//   B: parsePoint(process.env.TRIANGLE_POINT_B, { latitude: 8.685985, longitude: 77.727540 }),
+//   C: parsePoint(process.env.TRIANGLE_POINT_C, { latitude: 8.686051, longitude: 77.725166 }),
+// };
+
+
 export const TRIANGLE_POINTS = {
-  A: parsePoint(process.env.TRIANGLE_POINT_A, { latitude: 8.688042, longitude: 77.725464 }),
-  B: parsePoint(process.env.TRIANGLE_POINT_B, { latitude: 8.685985, longitude: 77.727540 }),
-  C: parsePoint(process.env.TRIANGLE_POINT_C, { latitude: 8.686051, longitude: 77.725166 }),
+  A: parsePoint(process.env.TRIANGLE_POINT_A, { latitude: 8.303832, longitude: 77.633597 }),
+  B: parsePoint(process.env.TRIANGLE_POINT_B, { latitude: 8.303824, longitude: 77.633658 }),
+  C: parsePoint(process.env.TRIANGLE_POINT_C, { latitude: 8.303770, longitude: 77.633649 }),
 };
 
 export const THRESHOLDS = {

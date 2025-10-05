@@ -163,6 +163,8 @@ const AutoLocationTracker = ({ navigation }) => {
       TRIANGLE_POINTS.B,
       TRIANGLE_POINTS.C
     );
+    console.log(inside);
+    
     setInsideRegion(inside);
 
     // ---------------- Load User ----------------

@@ -83,7 +83,7 @@ export default function Entry({ navigation }) {
         const gpsEnabled = await LocationServiceModule.isLocationEnabled?.();
         if (!gpsEnabled) {
           Alert.alert(
-            "GPS is Off",
+            "Turn on GPS",
             "Please turn on GPS/location services to start tracking"
           );
           return false;
