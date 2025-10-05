@@ -12,6 +12,8 @@ import Login from "./code/auth/signin";
 import Tabs from "./code/Tabs";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
+import AutoLocationTracker from "./code/components/Tracking";
+
 
 
 

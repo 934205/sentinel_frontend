@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   Image,
   ActivityIndicator,
+  BackHandler
 } from "react-native";
 
 import AutoLocationTracker from "../components/Tracking";
@@ -23,9 +24,18 @@ const Home = () => {
   const isDark = theme === "dark";
 
   useEffect(() => {
-      fetchUser();
-    },[])
-  
+    fetchUser();
+
+    // Disable Android back button
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => true // returning true blocks back button
+    );
+
+    // Cleanup listener when component unmounts
+    return () => backHandler.remove();
+  }, [])
+
 
   const fetchUser = async () => {
     try {

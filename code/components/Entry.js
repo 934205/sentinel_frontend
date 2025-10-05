@@ -89,9 +89,6 @@ export default function Entry({ navigation }) {
           return false;
         }
 
-        // ---------------- Start Location Service ----------------
-        LocationServiceModule.startService();
-        console.log("Tracking Started ✅");
       } catch (err) {
         console.error("Permission Error:", err);
       }
