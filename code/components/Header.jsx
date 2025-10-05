@@ -36,12 +36,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    // paddingVertical: 14,
+    paddingVertical: 14,
     paddingHorizontal: 20,
-    marginBottom:20
   },
   logoContainer: { flexDirection: "row", alignItems: "center" },
-  logo: { width: 40, height: 40, marginRight: 10 },
+  logo: { width: 40, height: 40, marginRight: 15 },
   title: { fontSize: 20, fontWeight: "700" },
   themeButton: { padding: 10, borderRadius: 16 },
 });
