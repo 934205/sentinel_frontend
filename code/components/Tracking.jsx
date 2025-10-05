@@ -202,8 +202,12 @@ const AutoLocationTracker = ({ navigation }) => {
               is_present: true,
               date: entryDate,
             }),
+          }).then(res => res.json()).then(data => {
+            if (!data.success) console.error("Log API error:", data);
+            else{
+              notify("Entry Logged ✅", `Entry time: ${global.entryTime}`);
+            }
           });
-          notify("Entry Logged ✅", `Entry time: ${global.entryTime}`);
         }
       } catch (err) {
         console.error(err);
@@ -291,6 +295,8 @@ const AutoLocationTracker = ({ navigation }) => {
               ? `${lastLocation.latitude.toFixed(6)}, ${lastLocation.longitude.toFixed(6)}`
               : "-"}
           </Text>
+          <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>Accuracy: {lastLocation.accuracy.toFixed(2)}</Text>
+          <Text style={{color:'red'}}>Please ensure accuracy less than 50</Text>
         </View>
 
         <View style={styles.infoBox}>
