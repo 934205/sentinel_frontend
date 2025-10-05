@@ -31,7 +31,7 @@ class LocationService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 for (location in locationResult.locations) {
-                    Log.d("LocationService", "Received location: ${location.latitude}, ${location.longitude}")
+                    Log.d("LocationService", "Received location: ${location.latitude}, ${location.longitude}, ${location.accuracy}")
                     sendLocationToJS(location)
                 }
             }
