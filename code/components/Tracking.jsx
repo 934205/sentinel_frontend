@@ -705,39 +705,383 @@
 // export { trackLocation, startTracking, stopTracking };
 // export default AutoLocationTracker;
 
+// screens/AutoLocationTracker.js
+// import React, { useEffect, useState } from "react";
+// import {
+//   View,
+//   Text,
+//   TouchableOpacity,
+//   StyleSheet,
+//   ScrollView,
+//   Alert,
+//   DeviceEventEmitter,
+//   Platform,
+//   PermissionsAndroid,
+//   Linking,
+// } from "react-native";
+// import AsyncStorage from "@react-native-async-storage/async-storage";
+// import PushNotification from "react-native-push-notification";
+// import { useTheme } from "./ThemeContext";
+// import { API_BASE_URL } from "@env";
+// import { TRIANGLE_POINTS, THRESHOLDS } from "../auth/config";
+// import { haversineDistance, isInsideTriangle } from "../utils/locationUtils";
+// import { NativeModules } from "react-native";
+
+// const { LocationServiceModule } = NativeModules;
+
+// // ---------------- Push Notification setup ----------------
+// PushNotification.configure({
+//   onNotification: (notification) => {
+//     console.log("Notification:", notification);
+//   },
+//   requestPermissions: Platform.OS === "ios",
+// });
+
+// const notify = (title, message) => {
+//   PushNotification.localNotification({
+//     channelId: "sentinel-shield",
+//     title,
+//     message,
+//     smallIcon: "ic_notification",
+//     playSound: true,
+//     soundName: "default",
+//     importance: "high",
+//     vibrate: true,
+//   });
+// };
+
+// // ---------------- Global State ----------------
+// global.lastLocation = global.lastLocation || null;
+// global.insideRegion = global.insideRegion || false;
+// global.entryTime = global.entryTime || null;
+// global.navigateToSignin = global.navigateToSignin || null;
+
+// // ---------------- Component ----------------
+// const AutoLocationTracker = ({ navigation }) => {
+//   const [trackingState, setTrackingState] = useState(false);
+//   const [lastLocation, setLastLocation] = useState(global.lastLocation);
+//   const [insideRegion, setInsideRegion] = useState(global.insideRegion);
+//   const [entryTime, setEntryTime] = useState(global.entryTime);
+
+//   const { theme } = useTheme();
+//   const isDark = theme === "dark";
+
+//   useEffect(() => {
+//     global.navigateToSignin = () => navigation.replace("login");
+
+//     // Listen to native location updates
+//     const subscription = DeviceEventEmitter.addListener(
+//       "LocationUpdate",
+//       (loc) => {
+//         console.log("JS received location:", loc);
+//         handleLocation(loc.latitude, loc.longitude, loc.accuracy || 0);
+//       }
+//     );
+
+//     handleStart();
+
+//     return () => {
+//       subscription.remove();
+//       handleStop();
+//     };
+//   }, []);
+
+//   // ---------------- Request Permissions ----------------
+//   const requestLocationPermission = async () => {
+//     if (Platform.OS === "ios") {
+//       const granted = await LocationServiceModule.requestPermission?.();
+//       return granted ?? false;
+//     } else {
+//       try {
+//         // Request fine location
+//         const fine = await PermissionsAndroid.request(
+//           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+//           {
+//             title: "Location Permission",
+//             message:
+//               "App needs access to your location for attendance tracking",
+//             buttonNeutral: "Ask Me Later",
+//             buttonNegative: "Cancel",
+//             buttonPositive: "OK",
+//           }
+//         );
+
+//         if (fine !== PermissionsAndroid.RESULTS.GRANTED) return false;
+
+//         // Request background location
+//         const background = await PermissionsAndroid.request(
+//           PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
+//           {
+//             title: "Background Location Permission",
+//             message: "App needs access to your location in the background",
+//             buttonNeutral: "Ask Me Later",
+//             buttonNegative: "Cancel",
+//             buttonPositive: "OK",
+//           }
+//         );
+
+//         return background === PermissionsAndroid.RESULTS.GRANTED;
+//       } catch (err) {
+//         console.error("Permission request error:", err);
+//         return false;
+//       }
+//     }
+//   };
+
+//   // ---------------- Handle Location ----------------
+//   const handleLocation = async (latitude, longitude, accuracy) => {
+//     if (!accuracy || accuracy > THRESHOLDS.ACCURACY) return;
+
+//     if (global.lastLocation) {
+//       const dist = haversineDistance(
+//         global.lastLocation.latitude,
+//         global.lastLocation.longitude,
+//         latitude,
+//         longitude
+//       );
+//       if (dist < THRESHOLDS.MIN_DISTANCE || dist > THRESHOLDS.MAX_JUMP) return;
+//     }
+
+//     const inside = isInsideTriangle(
+//       latitude,
+//       longitude,
+//       TRIANGLE_POINTS.A,
+//       TRIANGLE_POINTS.B,
+//       TRIANGLE_POINTS.C
+//     );
+
+//     let userData = null;
+//     try {
+//       const stored = await AsyncStorage.getItem("user");
+//       if (stored) userData = JSON.parse(stored);
+//     } catch (err) {
+//       console.error(err);
+//     }
+//     if (!userData) {
+//       global.lastLocation = { latitude, longitude };
+//       return;
+//     }
+
+//     // ---------------- Attendance Logic ----------------
+//     if (inside && !global.insideRegion) {
+//       global.insideRegion = true;
+//       const now = new Date();
+//       global.entryTime = now.toLocaleTimeString("en-GB", { hour12: false });
+//       const entryDate = now.toISOString().split("T")[0];
+
+//       try {
+//         const checkResponse = await fetch(
+//           `${API_BASE_URL}/location/checkattendance/${userData.reg_no}`
+//         );
+//         const checkData = await checkResponse.json();
+
+//         if (!checkData.hasEntry) {
+//           await fetch(`${API_BASE_URL}/location/log`, {
+//             method: "POST",
+//             headers: { "Content-Type": "application/json" },
+//             body: JSON.stringify({
+//               reg_no: userData.reg_no,
+//               latitude,
+//               longitude,
+//               entry_time: global.entryTime,
+//               is_present: true,
+//               date: entryDate,
+//             }),
+//           });
+//           notify("Entry Logged ✅", `Entry time: ${global.entryTime}`);
+//         }
+//       } catch (err) {
+//         console.error("Attendance API error:", err);
+//       }
+//     } else if (!inside && global.insideRegion) {
+//       global.insideRegion = false;
+//       const now = new Date();
+//       const Time = now.toLocaleTimeString("en-GB", { hour12: false });
+//       const [h, m, s] = Time.split(":").map(Number);
+//       const totalSeconds = h * 3600 + m * 60 + s;
+//       const start = 12 * 3600 + 50 * 60;
+//       const end = 14 * 3600;
+//       if (totalSeconds > start && totalSeconds < end) return;
+
+//       try {
+//         const resp = await fetch(`${API_BASE_URL}/location/exit-verification`, {
+//           method: "POST",
+//           headers: { "Content-Type": "application/json" },
+//           body: JSON.stringify({ reg_no: userData.reg_no, latitude, longitude }),
+//         });
+//         const data = await resp.json();
+//         if (data.success) {
+//           notify("Exit Logged ✅", `Exit time: ${h}:${m}:${s}`);
+//           if (global.navigateToSignin) {
+//             await AsyncStorage.removeItem("user");
+//             handleStop();
+//             global.navigateToSignin();
+//           }
+//         }
+//       } catch (err) {
+//         console.error("Exit API error:", err);
+//       }
+//     }
+
+//     global.lastLocation = { latitude, longitude, accuracy, timestamp: new Date().toISOString() };
+//     setLastLocation(global.lastLocation);
+//     setInsideRegion(global.insideRegion);
+//     setEntryTime(global.entryTime);
+//   };
+
+//   // ---------------- Start Tracking ----------------
+//   const handleStart = async () => {
+//     const hasPermission = await requestLocationPermission();
+//     if (!hasPermission) {
+//       Alert.alert(
+//         "Permission Required",
+//         "Enable location permissions in Settings",
+//         [
+//           { text: "Cancel", style: "cancel" },
+//           { text: "Open Settings", onPress: () => Linking.openSettings() },
+//         ]
+//       );
+//       return;
+//     }
+
+//     console.log("Permissions granted, starting LocationService...");
+//     LocationServiceModule.startService();
+//     setTrackingState(true);
+//     Alert.alert("Tracking started");
+//   };
+
+//   // ---------------- Stop Tracking ----------------
+//   const handleStop = () => {
+//     LocationServiceModule.stopService();
+//     setTrackingState(false);
+//     Alert.alert("Tracking stopped");
+//   };
+
+//   return (
+//     <ScrollView
+//       contentContainerStyle={[
+//         styles.container,
+//         { backgroundColor: isDark ? "#121212" : "#f9fafb" },
+//       ]}
+//     >
+//       <Text style={[styles.title, { color: isDark ? "#fff" : "#111" }]}>
+//         SentinelShield — Attendance Tracker
+//       </Text>
+
+//       <View
+//         style={[
+//           styles.statusCard,
+//           { backgroundColor: isDark ? "#1E1E1E" : "#fff" },
+//         ]}
+//       >
+//         <View style={styles.statusRow}>
+//           <View style={styles.statusBox}>
+//             <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>
+//               Tracking
+//             </Text>
+//             <Text
+//               style={[styles.value, { color: trackingState ? "#2e7d32" : "#c62828" }]}
+//             >
+//               {trackingState ? "Active" : "Stopped"}
+//             </Text>
+//           </View>
+//           <View style={styles.statusBox}>
+//             <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>
+//               Region
+//             </Text>
+//             <Text style={[styles.value, { color: isDark ? "#fff" : "#111" }]}>
+//               {insideRegion ? "Inside" : "Outside"}
+//             </Text>
+//           </View>
+//         </View>
+
+//         <View style={styles.infoBox}>
+//           <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>
+//             Last Location
+//           </Text>
+//           <Text style={[styles.value, { color: isDark ? "#fff" : "#111" }]}>
+//             {lastLocation
+//               ? `${lastLocation.latitude.toFixed(6)}, ${lastLocation.longitude.toFixed(6)}`
+//               : "-"}
+//           </Text>
+//         </View>
+
+//         <View style={styles.infoBox}>
+//           <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>
+//             Last Entry
+//           </Text>
+//           <Text style={[styles.value, { color: "#fff" }]}>{entryTime || "-"}</Text>
+//         </View>
+//       </View>
+
+//       <View style={styles.buttonRow}>
+//         <TouchableOpacity style={[styles.btnDanger]} onPress={handleStop}>
+//           <Text style={styles.btnText}>Stop Tracking</Text>
+//         </TouchableOpacity>
+//       </View>
+//     </ScrollView>
+//   );
+// };
+
+// const styles = StyleSheet.create({
+//   container: { padding: 20, paddingTop: 60, minHeight: "100%" },
+//   title: { fontSize: 22, fontWeight: "700", marginBottom: 20, textAlign: "center" },
+//   statusCard: {
+//     borderRadius: 14,
+//     padding: 16,
+//     marginBottom: 20,
+//     shadowColor: "#000",
+//     shadowOpacity: 0.06,
+//     shadowRadius: 6,
+//     shadowOffset: { width: 0, height: 4 },
+//     elevation: 3,
+//   },
+//   statusRow: { flexDirection: "row", justifyContent: "space-between" },
+//   statusBox: { flex: 1, alignItems: "center" },
+//   label: { fontSize: 12 },
+//   value: { fontSize: 16, fontWeight: "700", marginTop: 4 },
+//   infoBox: { marginTop: 12 },
+//   buttonRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 16 },
+//   btnDanger: {
+//     flex: 1,
+//     backgroundColor: "#f44336",
+//     paddingVertical: 14,
+//     borderRadius: 12,
+//     alignItems: "center",
+//     marginLeft: 8,
+//   },
+//   btnText: { color: "#fff", fontWeight: "700" },
+// });
+
+// export default AutoLocationTracker;
 
 
-
-
+// screens/AutoLocationTracker.js
 import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
+  TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
+  DeviceEventEmitter,
   Platform,
   PermissionsAndroid,
-  Alert,
+  Linking,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import BackgroundGeolocation from "react-native-background-geolocation";
 import PushNotification from "react-native-push-notification";
-import { TRIANGLE_POINTS, THRESHOLDS } from "../auth/config";
-import { haversineDistance, isInsideTriangle } from "../utils/locationUtils";
 import { useTheme } from "./ThemeContext";
 import { API_BASE_URL } from "@env";
+import { TRIANGLE_POINTS, THRESHOLDS } from "../auth/config";
+import { haversineDistance, isInsideTriangle } from "../utils/locationUtils";
+import { NativeModules } from "react-native";
 
-// ---------------- Global state ----------------
-global.lastLocation = global.lastLocation || null;
-global.insideRegion = global.insideRegion || false;
-global.entryTime = global.entryTime || null;
-global.navigateToSignin = global.navigateToSignin || null;
+const { LocationServiceModule } = NativeModules;
 
-// ---------------- Push Notification ----------------
 PushNotification.configure({
-  onNotification: function (notification) {
-    console.log("Notification:", notification);
-  },
+  onNotification: (notification) => console.log("Notification:", notification),
   requestPermissions: Platform.OS === "ios",
 });
 
@@ -754,171 +1098,190 @@ const notify = (title, message) => {
   });
 };
 
-// ---------------- Core Location Handler ----------------
-const handleLocation = async (latitude, longitude, setLastLocation, setInsideRegion) => {
-  try {
+global.lastLocation = global.lastLocation || null;
+global.insideRegion = global.insideRegion || false;
+global.entryTime = global.entryTime || null;
+global.navigateToSignin = global.navigateToSignin || null;
 
-    console.log("Location received:", { latitude, longitude, timestamp: new Date().toISOString() }); // <-- Log here
-    if (global.lastLocation) {
-      const dist = haversineDistance(
-        global.lastLocation.latitude,
-        global.lastLocation.longitude,
-        latitude,
-        longitude
-      );
-      if (dist < THRESHOLDS.MIN_DISTANCE || dist > THRESHOLDS.MAX_JUMP) return;
-    }
-
-    const inside = isInsideTriangle(latitude, longitude, TRIANGLE_POINTS.A, TRIANGLE_POINTS.B, TRIANGLE_POINTS.C);
-
-    global.lastLocation = { latitude, longitude, timestamp: new Date().toISOString() };
-    setLastLocation(global.lastLocation);
-    setInsideRegion(inside);
-
-    const stored = await AsyncStorage.getItem("user");
-    if (!stored) return;
-    const userData = JSON.parse(stored);
-
-    const now = new Date();
-    const entryDate = now.toISOString().split("T")[0];
-    const timeString = now.toLocaleTimeString("en-GB", { hour12: false });
-
-    // Entry
-    if (inside && !global.insideRegion) {
-      global.insideRegion = true;
-      global.entryTime = timeString;
-
-      const checkResponse = await fetch(`${API_BASE_URL}/location/checkattendance/${userData.reg_no}`);
-      const checkData = await checkResponse.json();
-
-      if (!checkData.hasEntry) {
-        await fetch(`${API_BASE_URL}/location/log`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            reg_no: userData.reg_no,
-            latitude,
-            longitude,
-            entry_time: global.entryTime,
-            is_present: true,
-            date: entryDate,
-          }),
-        });
-        notify("Entry Logged ✅", `Entry time: ${global.entryTime}`);
-      }
-    }
-
-    // Exit
-    else if (!inside && global.insideRegion) {
-      global.insideRegion = false;
-
-      const [h, m, s] = timeString.split(":").map(Number);
-      const totalSeconds = h * 3600 + m * 60 + s;
-      const start = 12 * 3600 + 50 * 60;
-      const end = 14 * 3600;
-      if (totalSeconds > start && totalSeconds < end) return;
-
-      const resp = await fetch(`${API_BASE_URL}/location/exit-verification`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reg_no: userData.reg_no, latitude, longitude }),
-      });
-      const data = await resp.json();
-      if (data.success) {
-        notify("Exit Logged ✅", `Exit time: ${h}:${m}:${s}`);
-        if (global.navigateToSignin) {
-          await AsyncStorage.removeItem("user");
-          BackgroundGeolocation.stop();
-          global.navigateToSignin();
-        }
-      }
-    }
-  } catch (err) {
-    console.error("Tracking error:", err);
-  }
-};
-
-// ---------------- UI Component ----------------
 const AutoLocationTracker = ({ navigation }) => {
-  const [lastLocation, setLastLocation] = useState(global.lastLocation || null);
-  const [insideRegion, setInsideRegion] = useState(global.insideRegion || false);
-  const [entryTime, setEntryTime] = useState(global.entryTime || null);
-  const [trackingStatus, setTrackingStatus] = useState("Stopped");
-
+  const [trackingState, setTrackingState] = useState(false);
+  const [lastLocation, setLastLocation] = useState(global.lastLocation);
+  const [insideRegion, setInsideRegion] = useState(global.insideRegion);
+  const [entryTime, setEntryTime] = useState(global.entryTime);
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
   useEffect(() => {
     global.navigateToSignin = () => navigation.replace("login");
 
-    const configureTracking = async () => {
-      if (Platform.OS === "android") {
-        const fine = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
-        const background = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION);
+    const subscription = DeviceEventEmitter.addListener(
+      "LocationUpdate",
+      (loc) => handleLocation(loc.latitude, loc.longitude, loc.accuracy || 0)
+    );
 
-        if (fine !== PermissionsAndroid.RESULTS.GRANTED || background !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert("Location permissions denied");
-          return;
-        }
-      }
+    // Only start tracking after permissions
+    requestLocationPermission().then((granted) => {
+      if (granted) startTracking();
+    });
 
-      BackgroundGeolocation.ready(
-        {
-          desiredAccuracy: BackgroundGeolocation.DESIRED_ACCURACY_HIGH,
-          distanceFilter: 5,
-          stopOnTerminate: false,
-          startOnBoot: true,
-          locationUpdateInterval: 10000, // 30 seconds
-          fastestLocationUpdateInterval: 10000,
-          notification: {
-            title: "SentinelShield Tracking",
-            text: "Location tracking is active",
-            channelName: "sentinel-shield",
-          },
-        },
-        (state) => {
-          if (!state.enabled) BackgroundGeolocation.start();
-          setTrackingStatus(state.enabled ? "Active" : "Stopped");
-        }
-      );
-
-      BackgroundGeolocation.onLocation(
-        (location) => handleLocation(location.coords.latitude, location.coords.longitude, setLastLocation, setInsideRegion),
-        (error) => console.log("Location error", error)
-      );
-
-      BackgroundGeolocation.onProviderChange((provider) => {
-        setTrackingStatus(provider.enabled ? "Active" : "Stopped");
-      });
+    return () => {
+      subscription.remove();
+      stopTracking();
     };
-
-    configureTracking();
-
-    return () => BackgroundGeolocation.removeListeners();
   }, []);
 
+  // ---------------- Request Permissions ----------------
+  const requestLocationPermission = async () => {
+    if (Platform.OS === "ios") {
+      const granted = await LocationServiceModule.requestPermission?.();
+      return granted ?? false;
+    } else {
+      try {
+        const fine = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: "Location Permission",
+            message: "App needs access to your location for attendance tracking",
+            buttonNeutral: "Ask Me Later",
+            buttonNegative: "Cancel",
+            buttonPositive: "OK",
+          }
+        );
+        if (fine !== PermissionsAndroid.RESULTS.GRANTED) return false;
+
+        const background = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
+          {
+            title: "Background Location Permission",
+            message: "App needs background location access",
+            buttonNeutral: "Ask Me Later",
+            buttonNegative: "Cancel",
+            buttonPositive: "OK",
+          }
+        );
+        return background === PermissionsAndroid.RESULTS.GRANTED;
+      } catch (err) {
+        console.error(err);
+        return false;
+      }
+    }
+  };
+
+  // ---------------- Handle Location ----------------
+  const handleLocation = async (latitude, longitude, accuracy) => {
+
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString("en-GB", { hour12: false }); // HH:MM:SS
+
+    console.log(`[${timestamp}] Location received: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}, accuracy: ${accuracy}m`);
+
+    // ---------------- Always update UI ----------------
+    global.lastLocation = { latitude, longitude, accuracy, timestamp: now.toISOString() };
+    setLastLocation(global.lastLocation);
+
+    const inside = isInsideTriangle(
+      latitude,
+      longitude,
+      TRIANGLE_POINTS.A,
+      TRIANGLE_POINTS.B,
+      TRIANGLE_POINTS.C
+    );
+    setInsideRegion(inside);
+
+    // ---------------- Attendance only if accurate and moved ----------------
+    const last = global.lastLocation;
+    let movedEnough = true;
+    if (last && last.latitude && last.longitude) {
+      const dist = haversineDistance(last.latitude, last.longitude, latitude, longitude);
+      if (dist < THRESHOLDS.MIN_DISTANCE || dist > THRESHOLDS.MAX_JUMP) movedEnough = false;
+    }
+    if (!accuracy || accuracy > THRESHOLDS.ACCURACY) movedEnough = false;
+
+    if (!movedEnough) return;
+
+    let userData = null;
+    try {
+      const stored = await AsyncStorage.getItem("user");
+      if (stored) userData = JSON.parse(stored);
+    } catch (err) {
+      console.error(err);
+    }
+    if (!userData) return;
+
+    // ---------------- Attendance Logic ----------------
+    if (inside && !global.insideRegion) {
+      global.insideRegion = true;
+      global.entryTime = timestamp;
+      setEntryTime(global.entryTime);
+      const entryDate = now.toISOString().split("T")[0];
+      try {
+        const checkResponse = await fetch(`${API_BASE_URL}/location/checkattendance/${userData.reg_no}`);
+        const checkData = await checkResponse.json();
+        if (!checkData.hasEntry) {
+          await fetch(`${API_BASE_URL}/location/log`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              reg_no: userData.reg_no,
+              latitude,
+              longitude,
+              entry_time: global.entryTime,
+              is_present: true,
+              date: entryDate,
+            }),
+          });
+          notify("Entry Logged ✅", `Entry time: ${global.entryTime}`);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    } else if (!inside && global.insideRegion) {
+      global.insideRegion = false;
+      const [h, m, s] = timestamp.split(":").map(Number);
+      try {
+        const resp = await fetch(`${API_BASE_URL}/location/exit-verification`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reg_no: userData.reg_no, latitude, longitude }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+          notify("Exit Logged ✅", `Exit time: ${h}:${m}:${s}`);
+          await AsyncStorage.removeItem("user");
+          stopTracking();
+          global.navigateToSignin();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  const startTracking = () => {
+    LocationServiceModule.startService();
+    setTrackingState(true);
+    Alert.alert("Tracking started");
+  };
+
+  const stopTracking = () => {
+    LocationServiceModule.stopService();
+    setTrackingState(false);
+    Alert.alert("Tracking stopped");
+  };
+
   return (
-    <ScrollView
-      contentContainerStyle={[styles.container, { backgroundColor: isDark ? "#121212" : "#f9fafb" }]}
-    >
-      <Text style={[styles.title, { color: isDark ? "#fff" : "#111" }]}>
-        SentinelShield — Attendance Tracker
-      </Text>
+    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: isDark ? "#121212" : "#f9fafb" }]}>
+      <Text style={[styles.title, { color: isDark ? "#fff" : "#111" }]}>SentinelShield — Attendance Tracker</Text>
 
       <View style={[styles.statusCard, { backgroundColor: isDark ? "#1E1E1E" : "#fff" }]}>
         <View style={styles.statusRow}>
           <View style={styles.statusBox}>
             <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>Tracking</Text>
-            <Text style={[styles.value, { color: trackingStatus === "Active" ? "#2e7d32" : "#c62828" }]}>
-              {trackingStatus}
-            </Text>
+            <Text style={[styles.value, { color: trackingState ? "#2e7d32" : "#c62828" }]}>{trackingState ? "Active" : "Stopped"}</Text>
           </View>
-
           <View style={styles.statusBox}>
             <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>Region</Text>
-            <Text style={[styles.value, { color: insideRegion ? "#2e7d32" : "#c62828" }]}>
-              {insideRegion ? "Inside" : "Outside"}
-            </Text>
+            <Text style={[styles.value, { color: isDark ? "#fff" : "#111" }]}>{insideRegion ? "Inside" : "Outside"}</Text>
           </View>
         </View>
 
@@ -927,17 +1290,21 @@ const AutoLocationTracker = ({ navigation }) => {
           <Text style={[styles.value, { color: isDark ? "#fff" : "#111" }]}>
             {lastLocation ? `${lastLocation.latitude.toFixed(6)}, ${lastLocation.longitude.toFixed(6)}` : "-"}
           </Text>
-
-          {/* Last Entry moved below Last Location */}
-          <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280", marginTop: 12 }]}>Last Entry</Text>
-          <Text style={[styles.value, { color: isDark ? "#fff" : "#111" }]}>
-            {entryTime || "-"}
-          </Text>
         </View>
+
+        <View style={styles.infoBox}>
+          <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>Last Entry</Text>
+          <Text style={[styles.value, { color: "#fff" }]}>{entryTime || "-"}</Text>
+        </View>
+      </View>
+
+      <View style={styles.buttonRow}>
+        <TouchableOpacity style={[styles.btnDanger]} onPress={stopTracking}>
+          <Text style={styles.btnText}>Stop Tracking</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
-
 };
 
 const styles = StyleSheet.create({
@@ -949,6 +1316,9 @@ const styles = StyleSheet.create({
   label: { fontSize: 12 },
   value: { fontSize: 16, fontWeight: "700", marginTop: 4 },
   infoBox: { marginTop: 12 },
+  buttonRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 16 },
+  btnDanger: { flex: 1, backgroundColor: "#f44336", paddingVertical: 14, borderRadius: 12, alignItems: "center", marginLeft: 8 },
+  btnText: { color: "#fff", fontWeight: "700" },
 });
 
 export default AutoLocationTracker;

@@ -1,3 +1,4 @@
+// screens/Entry.js
 import React, { useEffect } from "react";
 import {
   Image,
@@ -8,151 +9,117 @@ import {
   Alert,
   PermissionsAndroid,
 } from "react-native";
-import Geolocation from "react-native-geolocation-service";
 import PushNotification from "react-native-push-notification";
+import { NativeModules } from "react-native";
 
+const { LocationServiceModule } = NativeModules;
 
-// --- Request Location Permission ---
-
-export const requestLocationAccess = async () => {
-  try {
-    if (Platform.OS === "ios") {
-      // iOS -> ask for "always"
-      const status = await Geolocation.requestAuthorization("always");
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Location permission is needed. Please enable it in Settings.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Open Settings", onPress: () => Linking.openSettings() },
-          ]
-        );
-        return false;
-      }
-    } else if (Platform.OS === "android") {
-      // Step 1: Foreground
-      const fgGranted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        {
-          title: "Location Permission",
-          message: "Location permission is required for tracking students",
-          buttonPositive: "OK",
-          buttonNegative: "Cancel",
-        }
-      );
-
-      if (fgGranted !== PermissionsAndroid.RESULTS.GRANTED) {
-        Alert.alert(
-          "Permission Required",
-          "Enable location in Settings.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Open Settings", onPress: () => Linking.openSettings() },
-          ]
-        );
-        return false;
-      }
-
-      // Step 2: Background (Android 10+)
-      if (Platform.Version >= 29) {
-        const bgGranted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
-          {
-            title: "Background Location Permission",
-            message: "Background location access is required to track students even when app is not open",
-            buttonPositive: "OK",
-            buttonNegative: "Cancel",
-          }
-        );
-
-        if (bgGranted !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert(
-            "Background Permission Required",
-            "Enable background location in Settings.",
-            [
-              { text: "Cancel", style: "cancel" },
-              { text: "Open Settings", onPress: () => Linking.openSettings() },
-            ]
-          );
-          return false;
-        }
-      }
-    }
-
-    // Step 3: Check if location services are enabled
-    Geolocation.getCurrentPosition(
-      () => { }, // success → GPS ON
-      (error) => {
-        if (error.code === 2) {
-          Alert.alert(
-            "Enable Location Services",
-            "Your GPS/location services are turned off. Please enable them in Settings.",
-            [
-              { text: "Cancel", style: "cancel" },
-              { text: "Open Settings", onPress: () => Linking.openSettings() },
-            ]
-          );
-        }
-      },
-      { enableHighAccuracy: true, timeout: 15000 }
-    );
-
-    return true;
-  } catch (error) {
-    console.error("Error requesting location:", error);
-    return false;
-  }
-};
-
-
-// --- Configure Push Notification ---
-const configurePushNotifications = () => {
-  if (Platform.OS === "android") {
-    PushNotification.createChannel(
-      {
-        channelId: "sentinel-shield",
-        channelName: "Sentinel Shield",
-        importance: 4, // HIGH importance
-      },
-      (created) => console.log("Channel created:", created)
-    );
-  }
-
-  PushNotification.configure({
-    onNotification: function (notification) {
-      console.log('LOCAL NOTIFICATION ==>', notification);
-    },
-
-    // This line solves the problem that I was facing.
-    requestPermissions: Platform.OS === 'ios',
-  });
-};
-
-// --- Entry Component ---
 export default function Entry({ navigation }) {
   useEffect(() => {
     const requestPermissions = async () => {
-      if (Platform.OS === "android" && Platform.Version >= 33) {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
-        );
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert(
-            "Permission Required",
-            "Notification permission is needed. Please enable it in settings."
-          );
+      try {
+        // ---------------- iOS Location ----------------
+        if (Platform.OS === "ios") {
+          const granted = await LocationServiceModule.requestPermission?.();
+          if (!granted) {
+            Alert.alert(
+              "Location Permission Required",
+              "Please enable location access in Settings."
+            );
+            return false;
+          }
         }
+
+        // ---------------- Android Location ----------------
+        if (Platform.OS === "android") {
+          // Foreground
+          const fg = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+            {
+              title: "Location Permission",
+              message: "App needs access to your location",
+              buttonPositive: "OK",
+              buttonNegative: "Cancel",
+            }
+          );
+          if (fg !== PermissionsAndroid.RESULTS.GRANTED) {
+            Alert.alert("Location Permission Denied", "Cannot start tracking");
+            return false;
+          }
+
+          // Background (Android 10+)
+          if (Platform.Version >= 29) {
+            const bg = await PermissionsAndroid.request(
+              PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
+              {
+                title: "Background Location Permission",
+                message:
+                  "Background location access is needed to track students when app is closed",
+                buttonPositive: "OK",
+                buttonNegative: "Cancel",
+              }
+            );
+            if (bg !== PermissionsAndroid.RESULTS.GRANTED) {
+              Alert.alert(
+                "Background Location Denied",
+                "Cannot track in background"
+              );
+              return false;
+            }
+          }
+        }
+
+        // ---------------- Android Notifications ----------------
+        if (Platform.OS === "android" && Platform.Version >= 33) {
+          const notif = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+          );
+          if (notif !== PermissionsAndroid.RESULTS.GRANTED) {
+            console.log("Notification permission denied");
+          }
+        }
+
+        // ---------------- Check GPS ----------------
+        const gpsEnabled = await LocationServiceModule.isLocationEnabled?.();
+        if (!gpsEnabled) {
+          Alert.alert(
+            "GPS is Off",
+            "Please turn on GPS/location services to start tracking"
+          );
+          return false;
+        }
+
+        // ---------------- Start Location Service ----------------
+        LocationServiceModule.startService();
+        console.log("Tracking Started ✅");
+      } catch (err) {
+        console.error("Permission Error:", err);
       }
     };
 
+    // Configure Push Notifications
+    const configurePush = () => {
+      if (Platform.OS === "android") {
+        PushNotification.createChannel(
+          {
+            channelId: "sentinel-shield",
+            channelName: "Sentinel Shield",
+            importance: 4,
+          },
+          (created) => console.log("Channel created:", created)
+        );
+      }
+
+      PushNotification.configure({
+        onNotification: (notification) =>
+          console.log("LOCAL NOTIFICATION:", notification),
+        requestPermissions: Platform.OS === "ios",
+      });
+    };
+
+    configurePush();
     requestPermissions();
-    requestLocationAccess();
-    configurePushNotifications();
   }, []);
-
-
-  
 
   return (
     <View style={{ flex: 1, alignItems: "center", backgroundColor: "white" }}>
@@ -163,7 +130,7 @@ export default function Entry({ navigation }) {
       <View
         style={{
           backgroundColor: "blue",
-          height: "100%",
+          flex: 1,
           width: "100%",
           borderTopLeftRadius: 15,
           borderTopRightRadius: 15,
@@ -189,14 +156,10 @@ export default function Entry({ navigation }) {
             fontSize: 15,
           }}
         >
-          Sentinel Shield is a cutting-edge safety solution designed to ensure
-          student security within the campus using an advanced location tracking
-          system. By leveraging real-time tracking, the application enables
-          administrators and security personnel to monitor student movements,
-          respond swiftly to emergencies, and enhance overall campus safety.
-          With features like geofencing, emergency alerts, and secure access
-          controls, Sentinel Shield fosters a safe and protected environment,
-          giving students, parents, and faculty peace of mind.
+          Sentinel Shield ensures student security on campus using real-time
+          location tracking. Admins and security can monitor movements, respond
+          to emergencies, and enhance safety with geofencing, alerts, and secure
+          access controls.
         </Text>
         <View style={{ alignItems: "center", marginTop: 10 }}>
           <TouchableOpacity
@@ -223,8 +186,6 @@ export default function Entry({ navigation }) {
               Get Started
             </Text>
           </TouchableOpacity>
-
-            
         </View>
       </View>
     </View>

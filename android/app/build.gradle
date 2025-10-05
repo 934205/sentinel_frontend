@@ -96,7 +96,7 @@ android {
         release {
             storeFile file('sentinel.keystore')
             storePassword 'sentinel'
-            keyAlias 'sentinel'
+            keyAlias 'sentinel-alias'
             keyPassword 'sentinel'
         }
     }
@@ -107,10 +107,14 @@ android {
         release {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
+    }
+
+    lint {
+        baseline = file("lint-baseline.xml")
     }
 }
 
@@ -128,6 +132,12 @@ dependencies {
     exclude group: 'com.android.support'
     }
 
+    // for kt track
+    implementation 'com.google.android.gms:play-services-location:21.0.1'
+
 }
 
 apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"
+
+
+
