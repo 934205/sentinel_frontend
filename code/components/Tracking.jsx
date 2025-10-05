@@ -1,5 +1,5 @@
 // screens/AutoLocationTracker.js
-import React, { useEffect, useState ,} from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -21,7 +21,7 @@ import { NativeModules } from "react-native";
 
 const { LocationServiceModule } = NativeModules;
 
-
+// Push notifications config
 PushNotification.configure({
   onNotification: (notification) => console.log("Notification:", notification),
   requestPermissions: Platform.OS === "ios",
@@ -40,6 +40,7 @@ const notify = (title, message) => {
   });
 };
 
+// Globals
 global.lastLocation = global.lastLocation || null;
 global.insideRegion = global.insideRegion || false;
 global.entryTime = global.entryTime || null;
@@ -53,9 +54,7 @@ const AutoLocationTracker = ({ navigation }) => {
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
-
   useEffect(() => {
-    global.navigateToSignin = () => navigation.replace("login");
 
     const subscription = DeviceEventEmitter.addListener(
       "LocationUpdate",
@@ -72,7 +71,6 @@ const AutoLocationTracker = ({ navigation }) => {
     };
   }, []);
 
-  // ---------------- Request Permissions ----------------
   const requestLocationPermission = async () => {
     if (Platform.OS === "ios") {
       const granted = await LocationServiceModule.requestPermission?.();
@@ -80,26 +78,12 @@ const AutoLocationTracker = ({ navigation }) => {
     } else {
       try {
         const fine = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          {
-            title: "Location Permission",
-            message: "App needs access to your location for attendance tracking",
-            buttonNeutral: "Ask Me Later",
-            buttonNegative: "Cancel",
-            buttonPositive: "OK",
-          }
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
         );
         if (fine !== PermissionsAndroid.RESULTS.GRANTED) return false;
 
         const background = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
-          {
-            title: "Background Location Permission",
-            message: "App needs background location access",
-            buttonNeutral: "Ask Me Later",
-            buttonNegative: "Cancel",
-            buttonPositive: "OK",
-          }
+          PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION
         );
         return background === PermissionsAndroid.RESULTS.GRANTED;
       } catch (err) {
@@ -109,24 +93,15 @@ const AutoLocationTracker = ({ navigation }) => {
     }
   };
 
-  // ---------------- Handle Location ----------------
   const handleLocation = async (latitude, longitude, accuracy) => {
     const now = new Date();
     const timestamp = now.toLocaleTimeString("en-GB", { hour12: false });
 
-    console.log(
-      `[${timestamp}] Location received: ${latitude.toFixed(
-        6
-      )}, ${longitude.toFixed(6)}, accuracy: ${accuracy}m`
-    );
-
-    // ---------------- Validate Accuracy ----------------
     if (accuracy == null || accuracy > THRESHOLDS.ACCURACY) {
-      console.log(`[${timestamp}] ❌ Location discarded due to low accuracy (${accuracy}m)`);
+      console.log(`[${timestamp}] ❌ Discarded: low accuracy (${accuracy}m)`);
       return;
     }
 
-    // ---------------- Validate Distance ----------------
     let movedEnough = true;
     if (global.lastLocation) {
       const dist = haversineDistance(
@@ -135,24 +110,12 @@ const AutoLocationTracker = ({ navigation }) => {
         latitude,
         longitude
       );
-      
-      if (dist < THRESHOLDS.MIN_DISTANCE) {
-        console.log(`[${timestamp}] ❌ Location discarded: moved only ${dist.toFixed(2)}m`);
-        movedEnough = false;
-      } else if (dist > THRESHOLDS.MAX_JUMP) {
-        console.log(`[${timestamp}] ❌ Location discarded: jump too far ${dist.toFixed(2)}m`);
-        movedEnough = false;
-      }
+      if (dist < THRESHOLDS.MIN_DISTANCE || dist > THRESHOLDS.MAX_JUMP) movedEnough = false;
     }
+    if (!movedEnough && global.lastLocation) return;
 
-    // Always accept the first location
-    if (!global.lastLocation) movedEnough = true;
+    console.log(`[${timestamp}] ✅ Location accepted`);
 
-    if (!movedEnough) return;
-
-    console.log(`[${timestamp}] ✅ Valid Location accepted`);
-
-    // ---------------- Update Global Location ----------------
     global.lastLocation = { latitude, longitude, accuracy, timestamp: now.toISOString() };
     setLastLocation(global.lastLocation);
 
@@ -163,11 +126,10 @@ const AutoLocationTracker = ({ navigation }) => {
       TRIANGLE_POINTS.B,
       TRIANGLE_POINTS.C
     );
-    console.log(inside);
-    
+    const wasInside = global.insideRegion;
+    global.insideRegion = inside;
     setInsideRegion(inside);
 
-    // ---------------- Load User ----------------
     let userData = null;
     try {
       const stored = await AsyncStorage.getItem("user");
@@ -177,19 +139,14 @@ const AutoLocationTracker = ({ navigation }) => {
     }
     if (!userData) return;
 
-    // ---------------- Attendance Logic ----------------
-    if (inside && !global.insideRegion) {
-      global.insideRegion = true;
+    // ENTRY
+    if (inside && !wasInside) {
       global.entryTime = timestamp;
       setEntryTime(global.entryTime);
       const entryDate = now.toISOString().split("T")[0];
-
       try {
-        const checkResponse = await fetch(
-          `${API_BASE_URL}/location/checkattendance/${userData.reg_no}`
-        );
-        const checkData = await checkResponse.json();
-
+        const checkResp = await fetch(`${API_BASE_URL}/location/checkattendance/${userData.reg_no}`);
+        const checkData = await checkResp.json();
         if (!checkData.hasEntry) {
           await fetch(`${API_BASE_URL}/location/log`, {
             method: "POST",
@@ -206,12 +163,12 @@ const AutoLocationTracker = ({ navigation }) => {
           notify("Entry Logged ✅", `Entry time: ${global.entryTime}`);
         }
       } catch (err) {
-        console.error(err);
+        console.error("Entry error:", err);
       }
-    } else if (!inside && global.insideRegion) {
-      global.insideRegion = false;
-      const [h, m, s] = timestamp.split(":").map(Number);
+    }
 
+    // EXIT — immediate
+    if (!inside && wasInside) {
       try {
         const resp = await fetch(`${API_BASE_URL}/location/exit-verification`, {
           method: "POST",
@@ -219,15 +176,36 @@ const AutoLocationTracker = ({ navigation }) => {
           body: JSON.stringify({ reg_no: userData.reg_no, latitude, longitude }),
         });
         const data = await resp.json();
-
         if (data.success) {
-          notify("Exit Logged ✅", `Exit time: ${h}:${m}:${s}`);
+          notify("Exit Logged ✅", `Exit time: ${timestamp}`);
           await AsyncStorage.removeItem("user");
-          stopTracking();
-          global.navigateToSignin();
+          setTimeout(() => navigation.replace("login"), 0); // safe navigation call          
         }
       } catch (err) {
-        console.error(err);
+        console.error("Exit error:", err);
+      }
+    }
+
+    // AFTER-END-TIME GRACE API call (if still inside)
+    if (inside && wasInside) {
+      try {
+        const timingResp = await fetch(`${API_BASE_URL}/location/get-end-time/${userData.dept_year_id}`);
+        const timingData = await timingResp.json();
+        const today = new Date().toLocaleString("en-US", { weekday: "long" }).toLowerCase();
+        const endTimeStr = timingData[`${today}_end_time`];
+        if (!endTimeStr) return;
+
+        const [endH, endM] = endTimeStr.split(":").map(Number);
+        if (now.getHours() > endH || (now.getHours() === endH && now.getMinutes() > endM)) {
+          await fetch(`${API_BASE_URL}/location/exit-grace-check`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reg_no: userData.reg_no, latitude, longitude }),
+          });
+          console.log("✅ After-end-grace API called");
+        }
+      } catch (err) {
+        console.error("End grace API error:", err);
       }
     }
   };
@@ -255,27 +233,16 @@ const AutoLocationTracker = ({ navigation }) => {
         SentinelShield — Attendance Tracker
       </Text>
 
-      <View
-        style={[styles.statusCard, { backgroundColor: isDark ? "#1E1E1E" : "#fff" }]}
-      >
+      <View style={[styles.statusCard, { backgroundColor: isDark ? "#1E1E1E" : "#fff" }]}>
         <View style={styles.statusRow}>
           <View style={styles.statusBox}>
-            <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>
-              Tracking
-            </Text>
-            <Text
-              style={[
-                styles.value,
-                { color: trackingState ? "#2e7d32" : "#c62828" },
-              ]}
-            >
+            <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>Tracking</Text>
+            <Text style={[styles.value, { color: trackingState ? "#2e7d32" : "#c62828" }]}>
               {trackingState ? "Active" : "Stopped"}
             </Text>
           </View>
           <View style={styles.statusBox}>
-            <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>
-              Region
-            </Text>
+            <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>Region</Text>
             <Text style={[styles.value, { color: isDark ? "#fff" : "#111" }]}>
               {insideRegion ? "Inside" : "Outside"}
             </Text>
@@ -283,21 +250,15 @@ const AutoLocationTracker = ({ navigation }) => {
         </View>
 
         <View style={styles.infoBox}>
-          <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>
-            Last Location
-          </Text>
+          <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>Last Location</Text>
           <Text style={[styles.value, { color: isDark ? "#fff" : "#111" }]}>
-            {lastLocation
-              ? `${lastLocation.latitude.toFixed(6)}, ${lastLocation.longitude.toFixed(6)}`
-              : "-"}
+            {lastLocation ? `${lastLocation.latitude.toFixed(6)}, ${lastLocation.longitude.toFixed(6)}` : "-"}
           </Text>
         </View>
 
         <View style={styles.infoBox}>
-          <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>
-            Last Entry
-          </Text>
-          <Text style={[styles.value, { color: "#fff" }]}>{entryTime || "-"}</Text>
+          <Text style={[styles.label, { color: isDark ? "#aaa" : "#6b7280" }]}>Last Entry</Text>
+          <Text style={[styles.value, { color: isDark ? "#fff" : "#111" }]}>{entryTime || "-"}</Text>
         </View>
       </View>
 

@@ -137,7 +137,7 @@ const Login = ({ navigation }) => {
       // Compare similarity
       const sim = cosineSimilarity(userEmbedding, refEmbedding);
 
-      if (sim > 0.2) {
+      if (sim > 0.5) {
         await AsyncStorage.setItem("user", JSON.stringify(json.student));
         navigation.replace("Tabs", { screen: "Home" });
       } else {

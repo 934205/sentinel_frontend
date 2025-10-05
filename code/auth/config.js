@@ -30,7 +30,7 @@ export const TRIANGLE_POINTS = {
 
 export const THRESHOLDS = {
   ACCURACY: Number(process.env.ACCURACY_THRESHOLD) || 50,
-  MIN_DISTANCE: Number(process.env.MIN_DISTANCE_METERS) || 5,
+  MIN_DISTANCE: Number(process.env.MIN_DISTANCE_METERS) || 2,
   MAX_JUMP: Number(process.env.MAX_JUMP_DISTANCE) || 500,
 };
 
