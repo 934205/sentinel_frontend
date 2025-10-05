@@ -14,23 +14,23 @@ function parsePoint(str, fallback) {
 //   C: parsePoint(process.env.TRIANGLE_POINT_C, { latitude: 8.3360539, longitude: 77.5691025 }),
 // };
 
-//College Region
-// export const TRIANGLE_POINTS = {
-//   A: parsePoint(process.env.TRIANGLE_POINT_A, { latitude: 8.688042, longitude: 77.725464 }),
-//   B: parsePoint(process.env.TRIANGLE_POINT_B, { latitude: 8.685985, longitude: 77.727540 }),
-//   C: parsePoint(process.env.TRIANGLE_POINT_C, { latitude: 8.686051, longitude: 77.725166 }),
-// };
-
-
+// College Region
 export const TRIANGLE_POINTS = {
-  A: parsePoint(process.env.TRIANGLE_POINT_A, { latitude: 8.303832, longitude: 77.633597 }),
-  B: parsePoint(process.env.TRIANGLE_POINT_B, { latitude: 8.303824, longitude: 77.633658 }),
-  C: parsePoint(process.env.TRIANGLE_POINT_C, { latitude: 8.303770, longitude: 77.633649 }),
+  A: parsePoint(process.env.TRIANGLE_POINT_A, { latitude: 8.688042, longitude: 77.725464 }),
+  B: parsePoint(process.env.TRIANGLE_POINT_B, { latitude: 8.685985, longitude: 77.727540 }),
+  C: parsePoint(process.env.TRIANGLE_POINT_C, { latitude: 8.686051, longitude: 77.725166 }),
 };
+
+
+// export const TRIANGLE_POINTS = {
+//   A: parsePoint(process.env.TRIANGLE_POINT_A, { latitude: 8.303832, longitude: 77.633597 }),
+//   B: parsePoint(process.env.TRIANGLE_POINT_B, { latitude: 8.303824, longitude: 77.633658 }),
+//   C: parsePoint(process.env.TRIANGLE_POINT_C, { latitude: 8.303770, longitude: 77.633649 }),
+// };
 
 export const THRESHOLDS = {
   ACCURACY: Number(process.env.ACCURACY_THRESHOLD) || 50,
-  MIN_DISTANCE: Number(process.env.MIN_DISTANCE_METERS) || 2,
+  MIN_DISTANCE: Number(process.env.MIN_DISTANCE_METERS) || 5,
   MAX_JUMP: Number(process.env.MAX_JUMP_DISTANCE) || 500,
 };
 

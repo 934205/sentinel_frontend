@@ -12,8 +12,7 @@ import Login from "./code/auth/signin";
 import Tabs from "./code/Tabs";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
-import AutoLocationTracker from "./code/components/Tracking";
-
+import { navigationRef } from "./NavigationService";
 
 
 
@@ -29,7 +28,7 @@ export default function App() {
   return (
     <ThemeProvider>
         <GestureHandlerRootView style={styles.container}>
-          <NavigationContainer>
+          <NavigationContainer ref={navigationRef}>
             <Stack.Navigator initialRouteName="entry" screenOptions={{ headerShown: false }}>
               <Stack.Screen name="entry" component={Entry} />
               <Stack.Screen name="login" component={Login} />

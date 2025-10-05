@@ -35,20 +35,6 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  const handleEmergencyAlert = () => {
-    Alert.alert("🚨 Emergency Alert", "An alert has been sent to the authorities.");
-  };
-
-
-  const handleLogout = async () => {
-    try {
-      await AsyncStorage.removeItem("user");
-      navigation.replace("login");
-    } catch (error) {
-      console.log("❌ Error during logout:", error);
-    }
-  };
-
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: isDark ? "#121212" : "#F5F5F5" }]}
@@ -90,33 +76,6 @@ const ProfileScreen = ({ navigation }) => {
         </View>
       </View>
 
-      {/* Safety Tracking */}
-      <View
-        style={[styles.section, { backgroundColor: isDark ? "#1e1e1e" : "#fff" }]}
-      >
-        <Text style={[styles.sectionTitle, { color: isDark ? "#fff" : "#000" }]}>
-          Safety Tracking
-        </Text>
-        <View style={styles.infoRow}>
-          <Icon name="location-on" size={20} color="#FF5733" />
-          <Text style={[styles.infoText, { color: isDark ? "#ddd" : "#333" }]}>
-            Live Location Tracking Enabled
-          </Text>
-        </View>
-        <TouchableOpacity style={styles.button} onPress={handleEmergencyAlert}>
-          <Text style={styles.buttonText}>Send Emergency Alert</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Logout */}
-      <View style={styles.container}>
-        <TouchableOpacity
-          style={[styles.logoutButton, { backgroundColor: isDark ? "#4dabf7" : "#007BFF" }]}
-          onPress={handleLogout}
-        >
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
-      </View>
     </ScrollView>
   );
 };

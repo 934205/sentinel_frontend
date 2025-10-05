@@ -18,6 +18,11 @@ import { API_BASE_URL } from "@env";
 import { TRIANGLE_POINTS, THRESHOLDS } from "../auth/config";
 import { haversineDistance, isInsideTriangle } from "../utils/locationUtils";
 import { NativeModules } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { replace as replaceScreen } from '../../NavigationService';
+
+
+
 
 const { LocationServiceModule } = NativeModules;
 
@@ -46,13 +51,16 @@ global.insideRegion = global.insideRegion || false;
 global.entryTime = global.entryTime || null;
 global.navigateToSignin = global.navigateToSignin || null;
 
-const AutoLocationTracker = ({ navigation }) => {
+const AutoLocationTracker = () => {
   const [trackingState, setTrackingState] = useState(false);
   const [lastLocation, setLastLocation] = useState(global.lastLocation);
   const [insideRegion, setInsideRegion] = useState(global.insideRegion);
   const [entryTime, setEntryTime] = useState(global.entryTime);
   const { theme } = useTheme();
   const isDark = theme === "dark";
+
+  const navigation = useNavigation();
+
 
   useEffect(() => {
 
@@ -142,6 +150,8 @@ const AutoLocationTracker = ({ navigation }) => {
     // ENTRY
     if (inside && !wasInside) {
       global.entryTime = timestamp;
+      console.log("entry", inside, wasInside);
+
       setEntryTime(global.entryTime);
       const entryDate = now.toISOString().split("T")[0];
       try {
@@ -169,6 +179,8 @@ const AutoLocationTracker = ({ navigation }) => {
 
     // EXIT — immediate
     if (!inside && wasInside) {
+      console.log("exit", inside, wasInside);
+
       try {
         const resp = await fetch(`${API_BASE_URL}/location/exit-verification`, {
           method: "POST",
@@ -179,7 +191,9 @@ const AutoLocationTracker = ({ navigation }) => {
         if (data.success) {
           notify("Exit Logged ✅", `Exit time: ${timestamp}`);
           await AsyncStorage.removeItem("user");
-          setTimeout(() => navigation.replace("login"), 0); // safe navigation call          
+          stopTracking(); // ✅ stop service here
+
+          replaceScreen('login');
         }
       } catch (err) {
         console.error("Exit error:", err);
@@ -216,11 +230,14 @@ const AutoLocationTracker = ({ navigation }) => {
     Alert.alert("Tracking started");
   };
 
+
   const stopTracking = () => {
-    LocationServiceModule.stopService();
+    if (LocationServiceModule?.stopService) {
+      LocationServiceModule.stopService();
+    }
     setTrackingState(false);
-    Alert.alert("Tracking stopped");
   };
+
 
   return (
     <ScrollView
@@ -262,11 +279,6 @@ const AutoLocationTracker = ({ navigation }) => {
         </View>
       </View>
 
-      <View style={styles.buttonRow}>
-        <TouchableOpacity style={[styles.btnDanger]} onPress={stopTracking}>
-          <Text style={styles.btnText}>Stop Tracking</Text>
-        </TouchableOpacity>
-      </View>
     </ScrollView>
   );
 };
