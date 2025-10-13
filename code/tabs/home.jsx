@@ -7,7 +7,9 @@ import {
   SafeAreaView,
   Image,
   ActivityIndicator,
-  BackHandler
+  BackHandler,
+  Modal,
+  TouchableOpacity,
 } from "react-native";
 
 import AutoLocationTracker from "../components/Tracking";
@@ -15,35 +17,133 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { useTheme } from "../components/ThemeContext";
 import Header from "../components/Header";
+import { API_BASE_URL } from "@env";
+
+// ✅ Modular Firebase Imports
+import { getApp } from "@react-native-firebase/app";
+import {
+  getMessaging,
+  getToken,
+  onMessage,
+  onTokenRefresh,
+  requestPermission,
+  registerDeviceForRemoteMessages,
+  getInitialNotification,
+  onNotificationOpenedApp,
+} from "@react-native-firebase/messaging";
 
 const Home = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState();
+  const [currentMessage, setCurrentMessage] = useState(null);
 
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
+  const app = getApp();
+  const messaging = getMessaging(app);
+
   useEffect(() => {
     fetchUser();
 
-    // Disable Android back button
+    const initialize = async () => {
+      const storedUser = await AsyncStorage.getItem("user");
+      const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+
+      if (parsedUser) {
+        await registerDevice(parsedUser.reg_no);
+      }
+
+      await setupListeners();
+    };
+
+    initialize();
+
     const backHandler = BackHandler.addEventListener(
       "hardwareBackPress",
-      () => true // returning true blocks back button
+      () => true
     );
 
-    // Cleanup listener when component unmounts
     return () => backHandler.remove();
-  }, [])
+  }, []);
 
+  // 🔹 Register Device Token
+  const registerDevice = async (regNo) => {
+    try {
+      await requestPermission(messaging);
+      await registerDeviceForRemoteMessages(messaging);
 
+      const fcmToken = await getToken(messaging);
+      console.log("✅ FCM Token:", fcmToken);
+
+      await fetch(`${API_BASE_URL}/register-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ regNo, fcmToken }),
+      });
+
+      // 🔁 Handle token refresh
+      onTokenRefresh(messaging, async (token) => {
+        console.log("🔄 FCM Token refreshed:", token);
+        await fetch(`${API_BASE_URL}/register-token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ regNo, fcmToken: token }),
+        });
+      });
+    } catch (error) {
+      console.error("❌ Error registering device:", error);
+    }
+  };
+
+  // 🔹 Setup FCM Listeners
+  const setupListeners = async () => {
+    try {
+      await requestPermission(messaging);
+      await registerDeviceForRemoteMessages(messaging);
+
+      // Foreground message
+      onMessage(messaging, async (remoteMessage) => {
+        console.log("📩 Foreground FCM:", remoteMessage);
+        showAlertModal(remoteMessage);
+      });
+
+      // Background opened
+      onNotificationOpenedApp(messaging, (remoteMessage) => {
+        console.log("📬 Notification opened from background:", remoteMessage);
+        showAlertModal(remoteMessage);
+      });
+
+      // From killed state
+      const initialMessage = await getInitialNotification(messaging);
+      if (initialMessage) {
+        console.log("🚀 Opened from killed state:", initialMessage);
+        showAlertModal(initialMessage);
+      }
+    } catch (err) {
+      console.error("🔥 FCM setup error:", err);
+    }
+  };
+
+  // 🔹 Show emergency alert modal
+  const showAlertModal = (remoteMessage) => {
+    setCurrentMessage(remoteMessage);
+    setShowModal(true);
+  };
+
+  const handleAcknowledge = () => {
+    console.log("User acknowledged alert");
+    // Add any custom action here
+    setShowModal(false);
+  };
+
+  // 🔹 Fetch user info
   const fetchUser = async () => {
     try {
       setLoading(true);
       const storedUser = await AsyncStorage.getItem("user");
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
-      }
+      if (storedUser) setUser(JSON.parse(storedUser));
     } catch (error) {
       console.error("Error retrieving user:", error);
     } finally {
@@ -66,13 +166,9 @@ const Home = () => {
 
   return (
     <SafeAreaView
-      style={[
-        styles.container,
-        { backgroundColor: isDark ? "#121212" : "#fff" },
-      ]}
+      style={[styles.container, { backgroundColor: isDark ? "#121212" : "#fff" }]}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {/* Header */}
         <Header />
 
         {/* User Info */}
@@ -110,23 +206,28 @@ const Home = () => {
         </View>
         <AutoLocationTracker />
       </ScrollView>
+
+      {/* Emergency Alert Modal */}
+      <Modal transparent visible={showModal} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>⚠️ Verification</Text>
+            <Text style={styles.modalMessage}>You are now leaving from the campus.{"\n\n"}
+            This verification ensures that your exit is recorded for safety and monitoring purposes.</Text>
+            <TouchableOpacity style={styles.button} onPress={handleAcknowledge}>
+              <Text style={styles.buttonText}>ACKNOWLEDGE</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  scrollContainer: {
-    paddingTop: 20,
-    paddingBottom: 30,
-  },
+  container: { flex: 1 },
+  loaderContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  scrollContainer: { paddingTop: 20, paddingBottom: 30 },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -134,34 +235,37 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     marginLeft: 10,
   },
-  track: {
-    flexDirection: "row",
+  track: { flexDirection: "row", alignItems: "center", marginBottom: 20, marginLeft: 10 },
+  avatar: { width: 60, height: 60, borderRadius: 50, marginLeft: 20 },
+  userInfo: { marginLeft: 15 },
+  name: { fontSize: 20, fontWeight: "bold" },
+  studentId: { fontSize: 14, marginTop: 3 },
+  title: { fontSize: 18, fontWeight: "bold", marginLeft: 15 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
-    marginLeft: 10,
   },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 50,
-    marginLeft: 20,
+  modalContainer: {
+    width: "80%",
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 20,
+    alignItems: "center",
+    flex:0.5,
+    justifyContent:"space-evenly"
   },
-  userInfo: {
-    marginLeft: 15,
+  modalTitle: { fontSize: 24, fontWeight: "bold", marginBottom: 10, color:"red" },
+  modalMessage: { fontSize: 18, marginBottom: 20, textAlign: "center", color:"red" },
+  button: {
+    width: "100%",
+    backgroundColor: "green",
+    padding: 12,
+    borderRadius: 5,
+    alignItems: "center",
   },
-  name: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  studentId: {
-    fontSize: 14,
-    marginTop: 3,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginLeft: 15,
-  },
+  buttonText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
 });
 
 export default Home;

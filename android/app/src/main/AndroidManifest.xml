@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
 
 
 
@@ -24,6 +27,7 @@
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="${usesCleartextTraffic}"
         android:supportsRtl="true">
+
 
         <!-- Main Activity -->
         <activity
@@ -39,13 +43,20 @@
             </intent-filter>
         </activity>
 
-
-            <!-- Location Foreground Service -->
         <service
-            android:name=".LocationService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="location" />
+        android:name=".LocationService"
+        android:enabled="true"
+        android:foregroundServiceType="location"
+        android:exported="false" />
+
+        <receiver android:name=".RestartReceiver" android:enabled="true" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+
 
         <!-- Push Notification Service -->
         <service
@@ -77,6 +88,16 @@
 
         
         <service android:name="com.transistorsoft.rnbackgroundfetch.HeadlessTask"/>
+
+
+
+        <service android:name=".PersistentLocationService" android:foregroundServiceType="location"/>
+    
+        <receiver android:name=".BootReceiver" android:enabled="true" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
 
 
     </application>

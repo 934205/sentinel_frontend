@@ -22,6 +22,11 @@ import jpeg from 'jpeg-js';
 import { Buffer } from 'buffer';
 import { API_BASE_URL } from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useColorScheme } from 'react-native';
+import { NativeModules } from 'react-native';
+
+const { PersistentLocationModule } = NativeModules;
+
 
 const INPUT_WIDTH = 160;
 const INPUT_HEIGHT = 160;
@@ -33,6 +38,10 @@ const Login = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [regNo, setRegNo] = useState("");
   const [checkUser, setCheckUser] = useState(true);
+
+  const scheme = useColorScheme();
+  const placeholderColor = scheme === 'dark' ? "#ccc" : "#888";
+
 
   useEffect(() => {
     (async () => {
@@ -108,8 +117,8 @@ const Login = ({ navigation }) => {
     setLoading(true);
     try {
       console.log(API_BASE_URL);
-      
-      
+
+
       const res = await fetch(`${API_BASE_URL}/location/signin?reg_no=${regNo}`);
       const json = await res.json();
 
@@ -137,8 +146,10 @@ const Login = ({ navigation }) => {
       // Compare similarity
       const sim = cosineSimilarity(userEmbedding, refEmbedding);
 
-      if (sim > 0.5) {
+      if (sim > 0.6) {
         await AsyncStorage.setItem("user", JSON.stringify(json.student));
+        PersistentLocationModule.setRegNo(json.student.reg_no);
+
         navigation.replace("Tabs", { screen: "Home" });
       } else {
         Alert.alert("❌ Not Matched", `Similarity Score: ${sim.toFixed(3)}`);
@@ -228,12 +239,22 @@ const Login = ({ navigation }) => {
           <Text style={styles.title}>Face Verification</Text>
 
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                color: "black",
+                backgroundColor: "white",
+                borderColor: "black",
+              },
+            ]}
             placeholder="Enter Register Number"
+            placeholderTextColor={placeholderColor}
             value={regNo}
             onChangeText={setRegNo}
             keyboardType="numeric"
           />
+
+
 
           <View style={{ width: "100%", alignItems: "center", marginVertical: 10 }}>
             <Pressable

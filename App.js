@@ -16,8 +16,6 @@ import { navigationRef } from "./NavigationService";
 
 
 
-
-
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -33,6 +31,7 @@ export default function App() {
               <Stack.Screen name="entry" component={Entry} />
               <Stack.Screen name="login" component={Login} />
               <Stack.Screen name="Tabs" component={Tabs} />
+            
             </Stack.Navigator>
           </NavigationContainer>
         </GestureHandlerRootView>

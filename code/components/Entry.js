@@ -1,120 +1,97 @@
 // screens/Entry.js
 import React, { useEffect } from "react";
 import {
-  Image,
+  View,
   Text,
   TouchableOpacity,
-  View,
+  Image,
   Platform,
   Alert,
+  Linking,
   PermissionsAndroid,
 } from "react-native";
-import PushNotification from "react-native-push-notification";
 import { NativeModules } from "react-native";
 
-const { LocationServiceModule } = NativeModules;
+const { PersistentLocationModule } = NativeModules;
 
 export default function Entry({ navigation }) {
   useEffect(() => {
     const requestPermissions = async () => {
       try {
-        // ---------------- iOS Location ----------------
+        // ---------------- iOS ----------------
         if (Platform.OS === "ios") {
-          const granted = await LocationServiceModule.requestPermission?.();
+          // 1️⃣ Notification
+          if (PersistentLocationModule.requestNotificationPermission) {
+            await PersistentLocationModule.requestNotificationPermission();
+          }
+
+          // 2️⃣ Location (Foreground + Background)
+          const granted = await PersistentLocationModule.requestPermission?.();
           if (!granted) {
             Alert.alert(
               "Location Permission Required",
-              "Please enable location access in Settings."
+              "Enable location in Settings (Always Allow).",
+              [{ text: "Open Settings", onPress: () => Linking.openSettings() }]
             );
             return false;
           }
+          return true;
         }
 
-        // ---------------- Android Location ----------------
+        // ---------------- Android ----------------
         if (Platform.OS === "android") {
-          // Foreground
-          const fg = await PermissionsAndroid.request(
+          // 1️⃣ Notification (Android 13+)
+          if (Platform.Version >= 33) {
+            const notif = await PermissionsAndroid.request(
+              PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+            );
+            if (notif !== PermissionsAndroid.RESULTS.GRANTED) {
+              console.log("Notification permission denied");
+            }
+          }
+
+          // 2️⃣ Foreground location
+          const fine = await PermissionsAndroid.request(
             PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
             {
               title: "Location Permission",
-              message: "App needs access to your location",
+              message: "App needs location access to track students.",
               buttonPositive: "OK",
               buttonNegative: "Cancel",
             }
           );
-          if (fg !== PermissionsAndroid.RESULTS.GRANTED) {
-            Alert.alert("Location Permission Denied", "Cannot start tracking");
-            return false;
-          }
+          if (fine !== PermissionsAndroid.RESULTS.GRANTED) return false;
 
-          // Background (Android 10+)
+          // 3️⃣ Background location (Android 10+)
           if (Platform.Version >= 29) {
             const bg = await PermissionsAndroid.request(
               PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
               {
-                title: "Background Location Permission",
+                title: "Background Location",
                 message:
-                  "Background location access is needed to track students when app is closed",
+                  "Allow all the time to track students even when app is closed.",
                 buttonPositive: "OK",
                 buttonNegative: "Cancel",
               }
             );
             if (bg !== PermissionsAndroid.RESULTS.GRANTED) {
               Alert.alert(
-                "Background Location Denied",
-                "Cannot track in background"
+                "Background Location Required",
+                "Enable 'Allow all the time' in Settings to track students in background.",
+                [{ text: "Open Settings", onPress: () => Linking.openSettings() }]
               );
               return false;
             }
           }
-        }
-
-        // ---------------- Android Notifications ----------------
-        if (Platform.OS === "android" && Platform.Version >= 33) {
-          const notif = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
-          );
-          if (notif !== PermissionsAndroid.RESULTS.GRANTED) {
-            console.log("Notification permission denied");
-          }
-        }
-
-        // ---------------- Check GPS ----------------
-        const gpsEnabled = await LocationServiceModule.isLocationEnabled?.();
-        if (!gpsEnabled) {
-          Alert.alert(
-            "Turn on GPS",
-            "Please turn on GPS/location services to start tracking"
-          );
-          return false;
+          return true;
         }
 
       } catch (err) {
         console.error("Permission Error:", err);
+        return false;
       }
     };
 
-    // Configure Push Notifications
-    const configurePush = () => {
-      if (Platform.OS === "android") {
-        PushNotification.createChannel(
-          {
-            channelId: "sentinel-shield",
-            channelName: "Sentinel Shield",
-            importance: 4,
-          },
-          (created) => console.log("Channel created:", created)
-        );
-      }
-
-      PushNotification.configure({
-        onNotification: (notification) =>
-          console.log("LOCAL NOTIFICATION:", notification),
-        requestPermissions: Platform.OS === "ios",
-      });
-    };
-
-    configurePush();
     requestPermissions();
   }, []);
 
@@ -145,45 +122,31 @@ export default function Entry({ navigation }) {
         >
           Welcome To Sentinel Shield!!
         </Text>
-        <Text
+        <TouchableOpacity
           style={{
-            padding: 10,
-            textAlign: "center",
-            color: "white",
-            fontSize: 15,
+            backgroundColor: "white",
+            width: 200,
+            borderRadius: 10,
+            marginTop: 20,
+            height: 50,
+            justifyContent: "center",
+            borderWidth: 1,
+            borderColor: "blue",
+            alignSelf: "center",
           }}
+          onPress={() => navigation.replace("login")}
         >
-          Sentinel Shield ensures student security on campus using real-time
-          location tracking. Admins and security can monitor movements, respond
-          to emergencies, and enhance safety with geofencing, alerts, and secure
-          access controls.
-        </Text>
-        <View style={{ alignItems: "center", marginTop: 10 }}>
-          <TouchableOpacity
+          <Text
             style={{
-              backgroundColor: "white",
-              width: 200,
-              borderRadius: 10,
-              marginTop: 20,
-              height: 50,
-              justifyContent: "center",
-              borderWidth: 1,
-              borderColor: "blue",
+              color: "blue",
+              textAlign: "center",
+              padding: 10,
+              fontSize: 15,
             }}
-            onPress={() => navigation.replace("login")}
           >
-            <Text
-              style={{
-                color: "blue",
-                textAlign: "center",
-                padding: 10,
-                fontSize: 15,
-              }}
-            >
-              Get Started
-            </Text>
-          </TouchableOpacity>
-        </View>
+            Get Started
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );

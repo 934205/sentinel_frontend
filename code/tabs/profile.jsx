@@ -10,6 +10,7 @@ import {
   Image,
   PermissionsAndroid,
   Platform,
+  Button
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { useTheme } from "../components/ThemeContext";
@@ -74,6 +75,7 @@ const ProfileScreen = ({ navigation }) => {
             Department: Computer Science
           </Text>
         </View>
+
       </View>
 
     </ScrollView>
