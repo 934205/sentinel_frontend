@@ -41,7 +41,6 @@ const AutoLocationTracker = () => {
         try {
           await restoreLastLocation()
           await PersistentLocationModule.startService();
-          setTrackingState(true);
           console.log("✅ Tracking service started");
         } catch (e) {
           console.warn("Failed to start service:", e);
@@ -59,6 +58,7 @@ const AutoLocationTracker = () => {
           console.log("📍 Received location:", loc);
           setLastLocation(`${loc.latitude?.toFixed(6)}, ${loc.longitude?.toFixed(6)}`);
           setInsideRegion(loc.insideRegion ?? false);
+          if (!trackingState) setTrackingState(true);
           setEntryTime(loc.entryTime ?? "-");
         }
       }

@@ -152,7 +152,7 @@ public class NotificationHelper {
                     obj.put("status", "opened");
                     obj.put("reg_no", regNo);
 
-                    URL url = new URL("http://192.168.1.2:3000/alert/opened");
+                    URL url = new URL(Config.ALERT_OPEND_API);
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("POST");
                     conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
@@ -182,13 +182,14 @@ public class NotificationHelper {
 
 
     public static void showPersistentInputNotification(Context context, String title, String message,
-                                                   long timestamp, String replyKey) {
+                                                   long timestamp, String replyKey, String name) {
 
         String channelId = "persistent_input_channel_" + timestamp;
         createPersistentChannel(context, channelId);
 
         Intent replyIntent = new Intent(context, NotificationInputReceiver.class);
         replyIntent.putExtra("timestamp", timestamp);
+        replyIntent.putExtra("name", name);
         replyIntent.putExtra("replyKey", replyKey);
 
         PendingIntent pendingIntent;
@@ -292,6 +293,7 @@ public class NotificationHelper {
 
             long timestamp = intent.getLongExtra("timestamp", -1);
             String replyKey = intent.getStringExtra("replyKey");
+            String name = intent.getStringExtra("name");
 
             SharedPreferences prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
             String regNo = prefs.getString("reg_no", null);
@@ -318,7 +320,7 @@ public class NotificationHelper {
                         NotificationManagerCompat manager = NotificationManagerCompat.from(context);
                         manager.cancel((int) timestamp);
 
-                        sendReplyToServer(context, replyText, timestamp, regNo);
+                        sendReplyToServer(context, replyText, timestamp, regNo, name);
                     } else {
                          Log.e(TAG, "Reply was null for key: " + replyKey);
                     }
@@ -328,7 +330,7 @@ public class NotificationHelper {
             }
         }
 
-        private void sendReplyToServer(Context context, String replyText, long timestamp, String regNo) {
+        private void sendReplyToServer(Context context, String replyText, long timestamp, String regNo, String name) {
             new Thread(() -> {
                 HttpURLConnection conn = null;
                 try {
@@ -336,8 +338,11 @@ public class NotificationHelper {
                     obj.put("reg_no", regNo);
                     obj.put("reply", replyText);
                     obj.put("timestamp", String.valueOf(timestamp));
+                    obj.put("name",name);
 
-                    URL url = new URL("http://192.168.1.2:3000/alert/reply");
+                    Log.d("LocationService",regNo+replyText+timestamp+name);
+
+                    URL url = new URL(Config.ALERT_REPLY_API);
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("POST");
                     conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");

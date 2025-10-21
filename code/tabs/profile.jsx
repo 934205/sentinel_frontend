@@ -8,18 +8,18 @@ import {
   TouchableOpacity,
   Alert,
   Image,
-  PermissionsAndroid,
-  Platform,
-  Button
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { useTheme } from "../components/ThemeContext";
 import Header from "../components/Header";
+import { API_BASE_URL } from "@env";
+
 
 const ProfileScreen = ({ navigation }) => {
   const [user, setUser] = useState("");
   const { theme } = useTheme();
   const isDark = theme === "dark";
+  const [disableButton,setDisable]=useState(false)
 
   useEffect(() => {
     fetchUser();
@@ -35,6 +35,44 @@ const ProfileScreen = ({ navigation }) => {
       console.error("Error retrieving user:", error);
     }
   };
+
+  function sendAlert() {
+
+    setDisable(true)
+
+    const payload = {
+      reg_no: user?.reg_no, // assuming you have user state
+      timestamp: Date.now(),
+    };
+
+    fetch(`${API_BASE_URL}/location/emergency-alert`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          // Show success alert
+          Alert.alert("Alert", "Emergency Alert Sent Successfully");
+          console.log("API response:", data);
+        }
+        else {
+          Alert.alert("Alert", "Failed to send emergency alert");
+          console.log("API response:", data);
+        }
+      })
+      .catch((error) => {
+        console.error("Error sending alert:", error);
+        Alert.alert("Error", "Failed to send emergency alert");
+      })
+      .finally(()=>{
+        setDisable(false)
+      })
+  }
+
 
   return (
     <ScrollView
@@ -52,7 +90,7 @@ const ProfileScreen = ({ navigation }) => {
           {user ? user.name : "Guest"}
         </Text>
         <Text style={[styles.studentId, { color: isDark ? "#bbb" : "gray" }]}>
-          Student ID: {user ? user.reg_no : "Null"}
+          Student Reg No: {user ? user.reg_no : "Null"}
         </Text>
       </View>
 
@@ -75,7 +113,16 @@ const ProfileScreen = ({ navigation }) => {
             Department: Computer Science
           </Text>
         </View>
+      </View>
 
+      <View style={{ width: "100%", alignItems: "center", marginVertical: 10 }}>
+        <TouchableOpacity
+          style={[styles.button]}
+          onPress={sendAlert}
+          disabled={disableButton}
+        >
+          <Text style={styles.buttonText}>Send Emergency Alert</Text>
+        </TouchableOpacity >
       </View>
 
     </ScrollView>
@@ -130,10 +177,11 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: "#FF5733",
-    padding: 10,
+    paddingVertical: 10,
     borderRadius: 5,
     alignItems: "center",
     marginTop: 10,
+    paddingHorizontal: 50
   },
   buttonText: {
     color: "white",

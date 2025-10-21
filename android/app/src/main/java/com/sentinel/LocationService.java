@@ -12,9 +12,13 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 import androidx.annotation.Nullable;
-import androidx.core.app.NotificationCompat;
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.WritableMap;
@@ -37,12 +41,11 @@ public class LocationService extends Service {
 
     public static final String TAG = "LocationService";
     public static final String CHANNEL_ID = "sentinel_tracking_channel";
-
+    public static final String PREF_EXIT_EVENTS = "offline_exit_events";
     public static final String ACTION_FCM_ALERT = "ACTION_FCM_ALERT";
     public static final String ACTION_FCM_LOGOUT = "ACTION_FCM_LOGOUT";
     public static final String ACTION_FCM_INPUT_ALERT = "ACTION_FCM_INPUT_ALERT";
-
-
+    public static final String ACTION_FCM_STATUS_ALERT = "ACTION_FCM_STATUS_ALERT";
 
     private FusedLocationProviderClient fusedLocationClient;
     private LocationCallback locationCallback;
@@ -56,8 +59,9 @@ public class LocationService extends Service {
         sharedPreferences = getSharedPreferences("user_prefs", MODE_PRIVATE);
 
         createNotificationChannel();
-        // Changed to a system drawable for reliability if R.drawable.ic_notification is missing
-        startForeground(1, getNotification("Tracking Active")); 
+        // Changed to a system drawable for reliability if R.drawable.ic_notification is
+        // missing
+        startForeground(1, getNotification("Tracking Active"));
 
         checkBatteryOptimization();
 
@@ -73,11 +77,11 @@ public class LocationService extends Service {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
                     "Persistent Location Service",
-                    NotificationManager.IMPORTANCE_LOW
-            );
+                    NotificationManager.IMPORTANCE_LOW);
             channel.setDescription("Foreground service for location tracking");
             NotificationManager manager = getSystemService(NotificationManager.class);
-            if (manager != null) manager.createNotificationChannel(channel);
+            if (manager != null)
+                manager.createNotificationChannel(channel);
         }
     }
 
@@ -94,12 +98,17 @@ public class LocationService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PowerManager pm = getSystemService(PowerManager.class);
             if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
-                Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-                intent.setData(Uri.parse("package:" + getPackageName()));
-                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                // NOTE: Starting an activity from a service is generally bad practice and may fail.
-                // It's usually better to prompt the user from the React Native UI.
-                // try { startActivity(intent); } catch (Exception ignored) {} 
+                try {
+                    Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                    intent.setData(Uri.parse("package:" + getPackageName()));
+                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent); // Prompt user to allow ignore battery optimization
+                    Log.i(TAG, "🔋 Requested to ignore battery optimizations");
+                } catch (Exception e) {
+                    Log.e(TAG, "❌ Failed to request battery optimization ignore", e);
+                }
+            } else {
+                Log.i(TAG, "✅ Already ignoring battery optimizations");
             }
         }
     }
@@ -108,7 +117,8 @@ public class LocationService extends Service {
         locationCallback = new LocationCallback() {
             @Override
             public void onLocationResult(LocationResult result) {
-                if (result == null) return;
+                if (result == null)
+                    return;
                 for (Location loc : result.getLocations()) {
                     handleLocation(loc);
                 }
@@ -120,21 +130,23 @@ public class LocationService extends Service {
         LocationRequest request;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             // Using TimeUnit for clearer intent, matching the spirit of the original
-            request = new LocationRequest.Builder(TimeUnit.SECONDS.toMillis(10)) 
-                    .setMinUpdateIntervalMillis(TimeUnit.SECONDS.toMillis(5))
+            request = new LocationRequest.Builder(TimeUnit.MINUTES.toMillis(1))
+                    .setMinUpdateIntervalMillis(TimeUnit.SECONDS.toMillis(30))
                     .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
                     .build();
         } else {
             request = LocationRequest.create()
-                    .setInterval(10000)
-                    .setFastestInterval(5000)
+                    .setInterval(60000)
+                    .setFastestInterval(30000)
                     .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         }
 
         try {
-            // Priority.PRIORITY_HIGH_ACCURACY is used in your second block, 
-            // but LocationRequest.PRIORITY_HIGH_ACCURACY is the correct constant for older APIs.
-            // Using LocationRequest.PRIORITY_HIGH_ACCURACY for both for compatibility/simplicity.
+            // Priority.PRIORITY_HIGH_ACCURACY is used in your second block,
+            // but LocationRequest.PRIORITY_HIGH_ACCURACY is the correct constant for older
+            // APIs.
+            // Using LocationRequest.PRIORITY_HIGH_ACCURACY for both for
+            // compatibility/simplicity.
             fusedLocationClient.requestLocationUpdates(request, locationCallback, Looper.getMainLooper());
             Log.i(TAG, "📡 Started requesting location updates");
         } catch (SecurityException e) {
@@ -154,22 +166,44 @@ public class LocationService extends Service {
         // NOTE: Requires Config.java
         if (accuracy > Config.ACCURACY_THRESHOLD) {
             Log.w(TAG, "🚫 Skipped location: Accuracy too low (" + accuracy + ")");
-            return; 
+            return;
         }
 
         // 🛑 GUARD 2 & 3: Distance Checks
         com.sentinel.GeoPoint last = getLastLocation();
         if (last != null) {
             // Uses declared 'latitude' and 'longitude'
-            double dist = haversineDistance(last.latitude, last.longitude, latitude, longitude); 
-            
+            double dist = haversineDistance(last.latitude, last.longitude, latitude, longitude);
+
             if (dist < Config.MIN_DISTANCE_METERS) {
                 Log.w(TAG, "🚫 Skipped location: Distance too small (" + dist + ")");
-                return; 
+                return;
             }
             if (dist > Config.MAX_JUMP_DISTANCE) {
                 Log.w(TAG, "🚫 Skipped location: Distance too large/jump (" + dist + ")");
-                return; 
+                return;
+            }
+        }
+
+        // ✅ Auto-sync offline exits when internet returns
+        if (isInternetAvailable()) {
+            String today = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+            JSONObject offlineExit = getOfflineExitEvent(today);
+            if (offlineExit != null) {
+                try {
+                    String regNoOffline = offlineExit.getString("reg_no");
+                    double latOffline = offlineExit.getDouble("latitude");
+                    double lonOffline = offlineExit.getDouble("longitude");
+                    String dateOffline = offlineExit.getString("date");
+                    String timeOffline = offlineExit.getString("time");
+
+                    Log.i(TAG, "🌐 Internet restored. Sending offline exit for " + regNoOffline);
+                    callOfflineExitAPI(regNoOffline, latOffline, lonOffline, dateOffline, timeOffline);
+                    clearOfflineExitEvent(today);
+
+                } catch (Exception e) {
+                    Log.e(TAG, "❌ Error syncing offline exit", e);
+                }
             }
         }
 
@@ -178,36 +212,29 @@ public class LocationService extends Service {
 
         // Geofencing Logic
         // 'inside' variable declaration
-        boolean inside = isInsideTriangle(latitude, longitude, Config.A, Config.B, Config.C); 
+        boolean inside = isInsideTriangle(latitude, longitude, Config.A, Config.B, Config.C);
         boolean wasInside = sharedPreferences.getBoolean("insideRegion", false);
         sharedPreferences.edit().putBoolean("insideRegion", inside).apply();
 
-        if (sharedPreferences == null) return;
+        if (sharedPreferences == null)
+            return;
 
-        //🛑 GUARD 4: Reg No Check
+        // 🛑 GUARD 4: Reg No Check
         String regNo = sharedPreferences.getString("reg_no", null);
         Log.e("Regno", "Value: " + (regNo != null ? regNo : "null"));
         if (regNo == null) {
             Log.e(TAG, "🚫 Skipped location: reg_no not found in SharedPreferences.");
-            return; 
+            return;
         }
 
         // ... (rest of API calls)
         if (inside && !wasInside) {
-            // User just entered region
-            String entryTime = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
 
-            // Store in SharedPreferences (so later updates can reuse it)
-            sharedPreferences.edit().putString("entryTime", entryTime).apply();
+            sendLocationToJS(latitude, longitude, inside, "-");
 
-            // Send to RN with entryTime
-            sendLocationToJS(latitude, longitude, inside, entryTime);
-            
-            callEntryAPI(regNo, latitude, longitude, entryTime);
+            attemptEntry(regNo, latitude, longitude);
 
-
-        }
-        else {
+        } else {
             // Still inside OR outside region: send stored entryTime if exists
             String storedEntryTime = sharedPreferences.getString("entryTime", "-");
             sendLocationToJS(latitude, longitude, inside, storedEntryTime);
@@ -216,7 +243,7 @@ public class LocationService extends Service {
             if (!inside && wasInside) {
                 callExitAPI(regNo, latitude, longitude);
             }
-    }
+        }
     }
 
     // ⭐ THE KEY FIX: Reliable React Native Event Emission (from the first block)
@@ -224,10 +251,10 @@ public class LocationService extends Service {
         try {
             if (getApplication() instanceof MainApplication) {
                 MainApplication app = (MainApplication) getApplication();
-                
+
                 // CRITICAL CHECK: Ensure the React Native bridge/context is active
                 if (app.getReactNativeHost().getReactInstanceManager().getCurrentReactContext() != null) {
-                    
+
                     WritableMap map = Arguments.createMap();
                     map.putDouble("latitude", lat);
                     map.putDouble("longitude", lon);
@@ -236,10 +263,10 @@ public class LocationService extends Service {
 
                     // Emission via the direct ReactContext reference
                     app.getReactNativeHost().getReactInstanceManager()
-                        .getCurrentReactContext()
-                        .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-                        .emit("onLocationUpdate", map);
-                        
+                            .getCurrentReactContext()
+                            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                            .emit("onLocationUpdate", map);
+
                     Log.i(TAG, "📲 Sent location to React Native via direct context access.");
                 }
             }
@@ -249,10 +276,8 @@ public class LocationService extends Service {
         }
     }
 
-
     private void showNotification(String title, String message) {
-        String channelId = "tracking_channel";
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, channelId)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification) // or your custom icon
                 .setContentTitle(title)
                 .setContentText(message)
@@ -263,9 +288,63 @@ public class LocationService extends Service {
         manager.notify((int) System.currentTimeMillis(), builder.build());
     }
 
-
-
     // --- API and Geofencing Helper Methods (Unchanged from your second block) ---
+
+    private void attemptEntry(final String regNo, final double latitude, final double longitude) {
+        new Thread(() -> {
+            try {
+                // 1️⃣ Call checkTodayEntry API
+                URL checkUrl = new URL(Config.CHECK_ENTRY_API + "/" + regNo);
+                HttpURLConnection checkConn = (HttpURLConnection) checkUrl.openConnection();
+                checkConn.setRequestMethod("GET");
+                checkConn.setRequestProperty("Accept", "application/json");
+
+                int checkCode = checkConn.getResponseCode();
+                if (checkCode == 200) {
+                    BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(checkConn.getInputStream(), "utf-8"));
+                    StringBuilder response = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        response.append(line);
+                    }
+                    reader.close();
+
+                    JSONObject jsonResponse = new JSONObject(response.toString());
+                    boolean hasEntry = jsonResponse.getBoolean("hasEntry");
+
+                    if (!hasEntry) {
+                        // 2️⃣ No entry yet, create new entry
+                        String entryTime = new SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                                .format(new Date());
+                        sharedPreferences.edit().putString("entryTime", entryTime).apply();
+
+                        // Send to RN
+                        sendLocationToJS(latitude, longitude, true, entryTime);
+
+                        // Call logLocation API (entry)
+                        callEntryAPI(regNo, latitude, longitude, entryTime);
+
+                    } else {
+                        // 3️⃣ Already entered today
+                        Log.i(TAG, "✅ Entry already exists for today");
+
+                        String storedEntryTime = sharedPreferences.getString("entryTime", "-");
+
+                        // Send stored entry time to RN
+                        sendLocationToJS(latitude, longitude, true, storedEntryTime);
+                    }
+
+                } else {
+                    Log.e(TAG, "❌ CheckAttendance API failed, code: " + checkCode);
+                }
+
+                checkConn.disconnect();
+            } catch (Exception e) {
+                Log.e(TAG, "❌ Error calling CheckAttendance API", e);
+            }
+        }).start();
+    }
 
     private void callEntryAPI(String regNo, double lat, double lon, String entryTime) {
         new Thread(() -> {
@@ -281,21 +360,26 @@ public class LocationService extends Service {
                 URL url = new URL(Config.ENTRY_API);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json; utf-8");
+                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                conn.setRequestProperty("Accept", "application/json");
                 conn.setDoOutput(true);
 
+                byte[] data = obj.toString().getBytes("utf-8");
+                conn.setRequestProperty("Content-Length", String.valueOf(data.length));
+
                 try (OutputStream os = conn.getOutputStream()) {
-                    os.write(obj.toString().getBytes("utf-8"));
+                    os.write(data);
+                    os.flush(); // 🔹 important to send the data
                 }
 
-                int code = conn.getResponseCode();
+                int responseCode = conn.getResponseCode();
 
-                if (code == 200 || code == 201) {
-                    Log.i(TAG, "✅ Entry API Response: " + code);
+                if (responseCode == 200 || responseCode == 201) {
+                    Log.i(TAG, "✅ Entry API Response: " + responseCode);
                     String formattedTime = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
                     showNotification("Entry Logged ✅", "Entry time: " + formattedTime);
                 } else {
-                    Log.e(TAG, "❌ Entry API failed, code: " + code);
+                    Log.e(TAG, "❌ Entry API failed, code: " + responseCode);
                 }
 
                 conn.disconnect();
@@ -305,8 +389,13 @@ public class LocationService extends Service {
         }).start();
     }
 
+    private void callExitAPI(String regNo, double lat, double lon) {
 
-        private void callExitAPI(String regNo, double lat, double lon) {
+        if (!isInternetAvailable()) {
+            saveExitEventOffline(regNo, lat, lon);
+            return;
+        }
+
         new Thread(() -> {
             try {
                 JSONObject obj = new JSONObject();
@@ -317,43 +406,93 @@ public class LocationService extends Service {
                 URL url = new URL(Config.EXIT_API);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json; utf-8");
+                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                conn.setRequestProperty("Accept", "application/json");
                 conn.setDoOutput(true);
 
+                byte[] data = obj.toString().getBytes("utf-8");
+                conn.setRequestProperty("Content-Length", String.valueOf(data.length));
+
                 try (OutputStream os = conn.getOutputStream()) {
-                    os.write(obj.toString().getBytes("utf-8"));
+                    os.write(data);
+                    os.flush(); // 🔹 important to send the data
                 }
 
-                int code = conn.getResponseCode();
+                int responseCode = conn.getResponseCode();
 
-                if (code == 200 || code == 201) {
-                    Log.i(TAG, "✅ Exit API Response: " + code);
+                if (responseCode == 200 || responseCode == 201) {
+                    Log.i(TAG, "✅ Exit API Response: " + responseCode);
                     String formattedTime = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
                     showNotification("Exit Logged ✅", "Exit time: " + formattedTime);
+                    performFCMLogout();
                 } else {
-                    Log.e(TAG, "❌ Exit API failed, code: " + code);
+                    Log.e(TAG, "❌ Exit API failed, code: " + responseCode);
                 }
 
                 conn.disconnect();
             } catch (Exception e) {
                 Log.e(TAG, "❌ Exit API failed", e);
             }
-            }).start();
-        }
+        }).start();
+    }
 
+    private void callOfflineExitAPI(String regNo, double lat, double lon, String date, String time) {
+
+        new Thread(() -> {
+            try {
+                JSONObject obj = new JSONObject();
+                obj.put("reg_no", regNo);
+                obj.put("latitude", lat);
+                obj.put("longitude", lon);
+                obj.put("date", date);
+                obj.put("time", time);
+
+                URL url = new URL(Config.EXIT_OFFLINE_API);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                conn.setRequestProperty("Accept", "application/json");
+                conn.setDoOutput(true);
+
+                byte[] data = obj.toString().getBytes("utf-8");
+                conn.setRequestProperty("Content-Length", String.valueOf(data.length));
+
+                try (OutputStream os = conn.getOutputStream()) {
+                    os.write(data);
+                    os.flush(); // 🔹 important to send the data
+                }
+
+                int responseCode = conn.getResponseCode();
+
+                if (responseCode == 200 || responseCode == 201) {
+                    Log.i(TAG, "✅ Exit API Response: " + responseCode);
+                    String formattedTime = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
+                    showNotification("Exit Logged ✅", "Exit time: " + formattedTime + "Date: " + date);
+                    performFCMLogout();
+                } else {
+                    Log.e(TAG, "❌ Exit API failed, code: " + responseCode);
+                }
+
+                conn.disconnect();
+            } catch (Exception e) {
+                Log.e(TAG, "❌ Exit API failed", e);
+            }
+        }).start();
+    }
 
     private double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
         double R = 6371000;
         double dLat = Math.toRadians(lat2 - lat1);
         double dLon = Math.toRadians(lon2 - lon1);
-        double a = Math.sin(dLat/2)*Math.sin(dLat/2) +
-                Math.cos(Math.toRadians(lat1))*Math.cos(Math.toRadians(lat2))*
-                        Math.sin(dLon/2)*Math.sin(dLon/2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
     }
 
-    private boolean isInsideTriangle(double lat, double lon, com.sentinel.GeoPoint A, com.sentinel.GeoPoint B, com.sentinel.GeoPoint C) {
+    private boolean isInsideTriangle(double lat, double lon, com.sentinel.GeoPoint A, com.sentinel.GeoPoint B,
+            com.sentinel.GeoPoint C) {
         double d1 = sign(lon, lat, A.longitude, A.latitude, B.longitude, B.latitude);
         double d2 = sign(lon, lat, B.longitude, B.latitude, C.longitude, C.latitude);
         double d3 = sign(lon, lat, C.longitude, C.latitude, A.longitude, A.latitude);
@@ -363,10 +502,10 @@ public class LocationService extends Service {
     }
 
     private double sign(double px, double py, double ax, double ay, double bx, double by) {
-        return (px - bx)*(ay - by) - (ax - bx)*(py - by);
+        return (px - bx) * (ay - by) - (ax - bx) * (py - by);
     }
 
-   private void saveLastLocation(double lat, double lon) {
+    private void saveLastLocation(double lat, double lon) {
         sharedPreferences.edit()
                 .putString("lastLat", String.format(Locale.US, "%.6f", lat))
                 .putString("lastLon", String.format(Locale.US, "%.6f", lon))
@@ -382,7 +521,6 @@ public class LocationService extends Service {
         return new com.sentinel.GeoPoint(lat, lon);
     }
 
-    
     // --- Service Lifecycle Methods ---
 
     @Override
@@ -397,18 +535,21 @@ public class LocationService extends Service {
                 performFCMLogout();
                 // Service should not restart after logout
                 return START_NOT_STICKY;
-            }else if(ACTION_FCM_INPUT_ALERT.equals(action)){
+            } else if (ACTION_FCM_INPUT_ALERT.equals(action)) {
+                String info = intent.getStringExtra("alert_info");
+                String name = intent.getStringExtra("name");
+                long sentAt = intent.getLongExtra("sentAt", System.currentTimeMillis());
+                handleFCMInputAlert(sentAt, info, name);
+            } else if (ACTION_FCM_STATUS_ALERT.equals(action)) {
                 String info = intent.getStringExtra("alert_info");
                 long sentAt = intent.getLongExtra("sentAt", System.currentTimeMillis());
-                handleFCMInputAlert(sentAt, info);
+                performCheckOperation(sentAt, info);
             }
         }
 
         // Normal location tracking continues only for active sessions
         return START_STICKY;
     }
-
-
 
     @Override
     public void onDestroy() {
@@ -426,9 +567,6 @@ public class LocationService extends Service {
             sharedPreferences.edit().putBoolean("isLogout", false).apply();
         }
     }
-
-
-
 
     private void restartService() {
         Intent intent = new Intent(this, LocationService.class);
@@ -476,31 +614,95 @@ public class LocationService extends Service {
         }
     }
 
-
-
-
     private void handleFCMAlert(long sentAt, String info) {
         NotificationHelper.showNotification(
-            this,
-            "Alert",
-            info,
-            sentAt
-        );
+                this,
+                "Alert",
+                info,
+                sentAt);
     }
 
-    private void handleFCMInputAlert(long sentAt, String info) {
-        
+    private void handleFCMInputAlert(long sentAt, String info, String name) {
+
         // Show persistent input notification using NotificationHelper
         NotificationHelper.showPersistentInputNotification(
-            this,
-            "Reply Required",        // Notification title
-            info,                    // Notification message
-            sentAt,                  // Unique ID
-            "reply_key_" + sentAt   // RemoteInput key
-        );
+                this,
+                "Reply Required", // Notification title
+                info, // Notification message
+                sentAt, // Unique ID
+                "reply_key_" + sentAt, // RemoteInput key
+                name);
     }
 
+    private void performCheckOperation(long sentAt, String info) {
+        DeviceStatusHelper helper = new DeviceStatusHelper(getApplicationContext());
 
+        int battery = helper.getBatteryPercentage();
+        boolean gps = helper.isGpsEnabled();
+        boolean internet = helper.isInternetAvailable();
+
+        String regNo = sharedPreferences.getString("reg_no", null);
+
+        if (regNo != null) {
+            helper.sendStatusToServer(regNo, gps, internet, battery, sentAt);
+        }
+    }
+
+    private void saveExitEventOffline(String regNo, double lat, double lon) {
+        try {
+            SharedPreferences prefs = getSharedPreferences(PREF_EXIT_EVENTS, MODE_PRIVATE);
+
+            String date = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+            String time = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+
+            JSONObject obj = new JSONObject();
+            obj.put("reg_no", regNo);
+            obj.put("latitude", lat);
+            obj.put("longitude", lon);
+            obj.put("date", date);
+            obj.put("time", time);
+
+            prefs.edit().putString(date, obj.toString()).apply();
+
+            Log.i(TAG, "💾 Saved offline exit event for " + date + " : " + obj);
+            showNotification("Offline", "Exit stored locally. Will sync when online.");
+
+        } catch (Exception e) {
+            Log.e(TAG, "❌ Failed to save offline exit event", e);
+        }
+    }
+
+    private JSONObject getOfflineExitEvent(String date) {
+        SharedPreferences prefs = getSharedPreferences(PREF_EXIT_EVENTS, MODE_PRIVATE);
+        try {
+            String data = prefs.getString(date, null);
+            return data != null ? new JSONObject(data) : null;
+        } catch (Exception e) {
+            Log.e(TAG, "❌ Error parsing offline exit JSON", e);
+            return null;
+        }
+    }
+
+    private void clearOfflineExitEvent(String date) {
+        SharedPreferences prefs = getSharedPreferences(PREF_EXIT_EVENTS, MODE_PRIVATE);
+        prefs.edit().remove(date).apply();
+        Log.i(TAG, "🧹 Cleared offline exit for " + date);
+    }
+
+    public boolean isInternetAvailable() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (cm == null)
+            return false;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            return nc != null && (nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                    || nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                    || nc.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET));
+        } else {
+            NetworkInfo ni = cm.getActiveNetworkInfo();
+            return ni != null && ni.isConnected();
+        }
+    }
 
 }
-

@@ -81,8 +81,6 @@ const Login = ({ navigation }) => {
   }, []);
 
 
-  
-
   async function subscribeToFCMTopic() {
     try {
       // Request permission for notifications
@@ -137,6 +135,14 @@ const Login = ({ navigation }) => {
 
   // Verify with backend
   const verifyFace = async () => {
+    const now = new Date();
+    const hour = now.getHours();
+
+    if (hour >= 19 || hour < 8) {
+      Alert.alert("Restricted", "logins are not allowed between 7 PM and 8 AM");
+      return;
+    }
+
     if (!session) return;
     if (!regNo.trim()) {
       Alert.alert("Error", "Please enter a register number.");

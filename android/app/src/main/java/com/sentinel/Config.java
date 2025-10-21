@@ -4,7 +4,14 @@ public class Config {
     public static final String API_BASE_URL = "https://sentinel-shield-kocg.onrender.com/api";
     public static final String ENTRY_API = API_BASE_URL + "/location/log";
     public static final String EXIT_API = API_BASE_URL + "/location/exit-verification";
+    public static final String EXIT_OFFLINE_API = API_BASE_URL + "/location/exit-offline";
     public static final String CHECK_ENTRY_API = API_BASE_URL + "/location/checkattendance/";
+    public static final String ALERT_OPEND_API = API_BASE_URL + "/location/alert/opened";
+    public static final String ALERT_REPLY_API = API_BASE_URL + "/location/alert/reply";
+    public static final String ALERT_DEVICE_RESPONSE_API = API_BASE_URL + "/location/device/response";
+
+    
+
 
     public static final float ACCURACY_THRESHOLD = 50f;
     public static final float MIN_DISTANCE_METERS = 2f;
