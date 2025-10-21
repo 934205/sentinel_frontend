@@ -28,6 +28,19 @@ public class PersistentLocationModule extends ReactContextBaseJavaModule {
         return "PersistentLocationModule";
     }
 
+
+    @ReactMethod
+    public void getRegNo(Promise promise) {
+        try {
+            SharedPreferences prefs = getReactApplicationContext().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+            String regNo = prefs.getString("reg_no", null);
+            promise.resolve(regNo);
+        } catch (Exception e) {
+            promise.reject("GET_REGNO_FAILED", e);
+        }
+    }
+
+
     @ReactMethod
     public void setRegNo(String regNo) {
         SharedPreferences prefs = reactContext.getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
@@ -39,17 +52,23 @@ public class PersistentLocationModule extends ReactContextBaseJavaModule {
         try {
             SharedPreferences prefs = reactContext.getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
 
-            double lastLat = prefs.getFloat("lastLat", 0);
-            double lastLon = prefs.getFloat("lastLon", 0);
+            String latStr = prefs.getString("lastLat", "0");
+            String lonStr = prefs.getString("lastLon", "0");
             boolean insideRegion = prefs.getBoolean("insideRegion", false);
             String entryTime = prefs.getString("entryTime", "-");
 
+            double lastLat = Double.parseDouble(latStr);
+            double lastLon = Double.parseDouble(lonStr);
+
+
             WritableMap map = Arguments.createMap();
-            map.putString("lastLocation", lastLat + ", " + lastLon);
+            map.putDouble("latitude", lastLat);
+            map.putDouble("longitude", lastLon);
             map.putBoolean("insideRegion", insideRegion);
             map.putString("entryTime", entryTime);
 
             promise.resolve(map);
+
         } catch (Exception e) {
             promise.reject("ERROR_GETTING_LOCATION", e);
         }
@@ -73,7 +92,5 @@ public class PersistentLocationModule extends ReactContextBaseJavaModule {
         // ... (Service stop logic remains the same) ...
         reactContext.stopService(new Intent(reactContext, LocationService.class));
     }
-
-
 
 }

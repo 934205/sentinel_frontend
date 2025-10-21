@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useEffect, useState } from 'react';
 import {
   Text,
@@ -24,6 +21,7 @@ import { API_BASE_URL } from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from 'react-native';
 import { NativeModules } from 'react-native';
+import messaging from '@react-native-firebase/messaging';
 
 const { PersistentLocationModule } = NativeModules;
 
@@ -45,14 +43,24 @@ const Login = ({ navigation }) => {
 
   useEffect(() => {
     (async () => {
-      const storedUser = await AsyncStorage.getItem("user");
-      if (storedUser) {
-        navigation.navigate("Tabs", { screen: "Home" });
-      } else {
+      try {
+        const storedUser = await AsyncStorage.getItem("user");
+        const regNo = await PersistentLocationModule.getRegNo();
+
+        if (storedUser && regNo) {
+          // Both exist — user already signed in
+          navigation.replace("Tabs", { screen: "Home" });
+        } else {
+          // Either missing — show sign-in
+          setCheckUser(false);
+        }
+      } catch (err) {
+        console.error("Error checking user:", err);
         setCheckUser(false);
       }
     })();
   }, []);
+
 
   // Load ONNX model
   useEffect(() => {
@@ -71,6 +79,32 @@ const Login = ({ navigation }) => {
       }
     })();
   }, []);
+
+
+  
+
+  async function subscribeToFCMTopic() {
+    try {
+      // Request permission for notifications
+      const authStatus = await messaging().requestPermission();
+      const enabled =
+        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+        authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+      if (enabled) {
+        console.log('Notification permission granted.');
+
+        // Subscribe to topic “all”
+        await messaging().subscribeToTopic('remember');
+        console.log('Subscribed to topic: remember');
+      } else {
+        Alert.alert('Permission denied', 'Notifications are disabled');
+      }
+    } catch (error) {
+      console.error('Error setting up FCM:', error);
+    }
+  }
+
 
   // Capture image from camera
   const captureFromCamera = async () => {
@@ -113,7 +147,6 @@ const Login = ({ navigation }) => {
       return;
     }
 
-
     setLoading(true);
     try {
       console.log(API_BASE_URL);
@@ -149,6 +182,7 @@ const Login = ({ navigation }) => {
       if (sim > 0.6) {
         await AsyncStorage.setItem("user", JSON.stringify(json.student));
         PersistentLocationModule.setRegNo(json.student.reg_no);
+        await subscribeToFCMTopic()
 
         navigation.replace("Tabs", { screen: "Home" });
       } else {

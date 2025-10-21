@@ -21,7 +21,10 @@ import com.sentinel.PersistentLocationPackage
 class MainApplication : Application(), ReactApplication, Configuration.Provider {
 
     companion object {
+
+        @JvmField
         var reactContext: ReactApplicationContext? = null
+
     }
 
     override val reactNativeHost: ReactNativeHost = object : ReactNativeHost(this) {
@@ -43,8 +46,10 @@ class MainApplication : Application(), ReactApplication, Configuration.Provider 
         // Create notification channel for foreground service
         createNotificationChannel()
 
-        
+        // Safe cast to ReactApplicationContext
+        reactContext = reactNativeHost.reactInstanceManager.currentReactContext as? ReactApplicationContext
     }
+
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -57,6 +62,8 @@ class MainApplication : Application(), ReactApplication, Configuration.Provider 
             manager.createNotificationChannel(channel)
         }
     }
+
+    
 
     override fun getWorkManagerConfiguration(): Configuration =
         Configuration.Builder()

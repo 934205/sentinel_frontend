@@ -10,6 +10,8 @@ import android.util.Log;
 import android.content.SharedPreferences;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
@@ -33,8 +35,14 @@ import java.util.concurrent.TimeUnit;
 
 public class LocationService extends Service {
 
-    private static final String TAG = "LocationService";
-    private static final String CHANNEL_ID = "sentinel_tracking_channel";
+    public static final String TAG = "LocationService";
+    public static final String CHANNEL_ID = "sentinel_tracking_channel";
+
+    public static final String ACTION_FCM_ALERT = "ACTION_FCM_ALERT";
+    public static final String ACTION_FCM_LOGOUT = "ACTION_FCM_LOGOUT";
+    public static final String ACTION_FCM_INPUT_ALERT = "ACTION_FCM_INPUT_ALERT";
+
+
 
     private FusedLocationProviderClient fusedLocationClient;
     private LocationCallback locationCallback;
@@ -77,7 +85,7 @@ public class LocationService extends Service {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("SentinelShield")
                 .setContentText(content)
-                .setSmallIcon(android.R.drawable.ic_menu_mylocation) // Using system icon
+                .setSmallIcon(R.drawable.ic_notification) // Using system icon
                 .setOngoing(true)
                 .build();
     }
@@ -174,9 +182,11 @@ public class LocationService extends Service {
         boolean wasInside = sharedPreferences.getBoolean("insideRegion", false);
         sharedPreferences.edit().putBoolean("insideRegion", inside).apply();
 
+        if (sharedPreferences == null) return;
+
         //🛑 GUARD 4: Reg No Check
         String regNo = sharedPreferences.getString("reg_no", null);
-        Log.e("Regno",regNo);
+        Log.e("Regno", "Value: " + (regNo != null ? regNo : "null"));
         if (regNo == null) {
             Log.e(TAG, "🚫 Skipped location: reg_no not found in SharedPreferences.");
             return; 
@@ -377,20 +387,47 @@ public class LocationService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // START_STICKY is correct for services that should be restarted by the system
-        return START_STICKY; 
+        if (intent != null) {
+            String action = intent.getAction();
+            if (ACTION_FCM_ALERT.equals(action)) {
+                String info = intent.getStringExtra("alert_info");
+                long sentAt = intent.getLongExtra("sentAt", System.currentTimeMillis());
+                handleFCMAlert(sentAt, info);
+            } else if (ACTION_FCM_LOGOUT.equals(action)) {
+                performFCMLogout();
+                // Service should not restart after logout
+                return START_NOT_STICKY;
+            }else if(ACTION_FCM_INPUT_ALERT.equals(action)){
+                String info = intent.getStringExtra("alert_info");
+                long sentAt = intent.getLongExtra("sentAt", System.currentTimeMillis());
+                handleFCMInputAlert(sentAt, info);
+            }
+        }
+
+        // Normal location tracking continues only for active sessions
+        return START_STICKY;
     }
+
+
 
     @Override
     public void onDestroy() {
         super.onDestroy();
+
         if (fusedLocationClient != null && locationCallback != null) {
             fusedLocationClient.removeLocationUpdates(locationCallback);
         }
 
-        Intent broadcastIntent = new Intent(this, RestartReceiver.class);
-        sendBroadcast(broadcastIntent);
+        boolean isLogout = sharedPreferences.getBoolean("isLogout", false);
+        if (!isLogout) {
+            sendBroadcast(new Intent(this, RestartReceiver.class));
+        } else {
+            Log.i(TAG, "🚫 Service not restarted — logout detected");
+            sharedPreferences.edit().putBoolean("isLogout", false).apply();
+        }
     }
+
+
 
 
     private void restartService() {
@@ -407,5 +444,63 @@ public class LocationService extends Service {
     public IBinder onBind(Intent intent) {
         return null;
     }
+
+    private void performFCMLogout() {
+        try {
+            // ✅ Mark logout before clearing data
+            sharedPreferences.edit().putBoolean("isLogout", true).apply();
+
+            // Stop location updates
+            if (fusedLocationClient != null && locationCallback != null) {
+                fusedLocationClient.removeLocationUpdates(locationCallback);
+                fusedLocationClient = null;
+                locationCallback = null;
+            }
+
+            // ✅ Stop service immediately
+            stopForeground(true);
+            stopSelf();
+
+            // ✅ Now clear other data, but keep isLogout flag
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.remove("reg_no");
+            editor.remove("lastLat");
+            editor.remove("lastLon");
+            editor.remove("insideRegion");
+            editor.remove("entryTime");
+            editor.apply();
+
+            Log.d(TAG, "✅ Logout performed successfully via FCM");
+        } catch (Exception e) {
+            Log.e(TAG, "❌ Logout failed via FCM", e);
+        }
+    }
+
+
+
+
+    private void handleFCMAlert(long sentAt, String info) {
+        NotificationHelper.showNotification(
+            this,
+            "Alert",
+            info,
+            sentAt
+        );
+    }
+
+    private void handleFCMInputAlert(long sentAt, String info) {
+        
+        // Show persistent input notification using NotificationHelper
+        NotificationHelper.showPersistentInputNotification(
+            this,
+            "Reply Required",        // Notification title
+            info,                    // Notification message
+            sentAt,                  // Unique ID
+            "reply_key_" + sentAt   // RemoteInput key
+        );
+    }
+
+
+
 }
 

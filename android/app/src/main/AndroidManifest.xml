@@ -57,6 +57,24 @@
         </receiver>
 
 
+        <service
+            android:name=".FirebaseMessaging"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <receiver
+        android:name=".NotificationHelper$NotificationClickReceiver"
+        android:exported="true" />
+
+        <receiver
+        android:name=".NotificationHelper$NotificationInputReceiver"
+        android:exported="true"
+        android:directBootAware="true" />
+
+
 
         <!-- Push Notification Service -->
         <service

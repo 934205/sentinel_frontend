@@ -13,6 +13,7 @@ import {
   DeviceEventEmitter,
 } from "react-native";
 import { NativeModules } from "react-native";
+import { useTheme } from "./ThemeContext";
 
 const { PersistentLocationModule } = NativeModules;
 
@@ -21,6 +22,11 @@ const AutoLocationTracker = () => {
   const [lastLocation, setLastLocation] = useState("-");
   const [insideRegion, setInsideRegion] = useState(false);
   const [entryTime, setEntryTime] = useState("-");
+
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const styles = getStyles(isDark);
+
 
   useEffect(() => {
     const init = async () => {
@@ -71,7 +77,9 @@ const AutoLocationTracker = () => {
     if (PersistentLocationModule?.getLastLocation) {
       try {
         const locData = await PersistentLocationModule.getLastLocation();
-        setLastLocation(locData.lastLocation);
+        setLastLocation(
+          `${locData.latitude.toFixed(6)}, ${locData.longitude.toFixed(6)}`
+        );
         setInsideRegion(locData.insideRegion);
         setEntryTime(locData.entryTime);
       } catch (e) {
@@ -104,7 +112,7 @@ const AutoLocationTracker = () => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView style={styles.container}>
       <Text style={styles.title}>SentinelShield — Attendance Tracker</Text>
 
       <View style={styles.statusCard}>
@@ -146,5 +154,40 @@ const styles = StyleSheet.create({
   value: { fontSize: 16, fontWeight: "700", marginTop: 4, color: "#111" },
   infoBox: { marginTop: 12, alignItems: "flex-start" },
 });
+
+
+const getStyles = (isDark) =>
+  StyleSheet.create({
+    container: {
+      padding: 20,
+      paddingTop: 60,
+      minHeight: "100%",
+      backgroundColor: isDark ? "#121212" : "#fff",
+    },
+    title: {
+      fontSize: 22,
+      fontWeight: "700",
+      marginBottom: 20,
+      textAlign: "center",
+      color: isDark ? "#fff" : "#000",
+    },
+    statusCard: {
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 20,
+      backgroundColor: isDark ? "#1e1e1e" : "#fff",
+      shadowColor: isDark ? "#fff" : "#000",
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 3,
+    },
+    statusRow: { flexDirection: "row", justifyContent: "space-between" },
+    statusBox: { flex: 1, alignItems: "center" },
+    label: { fontSize: 12, color: isDark ? "#aaa" : "#6b7280" },
+    value: { fontSize: 16, fontWeight: "700", marginTop: 4, color: isDark ? "#fff" : "#111" },
+    infoBox: { marginTop: 12, alignItems: "flex-start" },
+  });
+
 
 export default AutoLocationTracker;

@@ -1,3 +1,6 @@
+
+
+
 import React, { useState, useEffect } from "react";
 import {
   ScrollView,
@@ -11,13 +14,15 @@ import {
   Modal,
   TouchableOpacity,
 } from "react-native";
-
+import { useNavigation } from '@react-navigation/native';
+import { NativeEventEmitter, NativeModules } from "react-native";
 import AutoLocationTracker from "../components/Tracking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import { useTheme } from "../components/ThemeContext";
 import Header from "../components/Header";
 import { API_BASE_URL } from "@env";
+import { DeviceEventEmitter } from "react-native";
 
 // ✅ Modular Firebase Imports
 import { getApp } from "@react-native-firebase/app";
@@ -32,17 +37,21 @@ import {
   onNotificationOpenedApp,
 } from "@react-native-firebase/messaging";
 
+
+const { PersistentLocationModule } = NativeModules;
+
 const Home = () => {
+
+  const navigation = useNavigation();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState();
-  const [currentMessage, setCurrentMessage] = useState(null);
 
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
   const app = getApp();
   const messaging = getMessaging(app);
+
 
   useEffect(() => {
     fetchUser();
@@ -77,65 +86,29 @@ const Home = () => {
       const fcmToken = await getToken(messaging);
       console.log("✅ FCM Token:", fcmToken);
 
-      await fetch(`${API_BASE_URL}/register-token`, {
+      await fetch(`${API_BASE_URL}/location/register-token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ regNo, fcmToken }),
-      });
+      })
+      .then((res)=>res.json())
+      .then((data)=>(console.log(data)));
+
 
       // 🔁 Handle token refresh
       onTokenRefresh(messaging, async (token) => {
         console.log("🔄 FCM Token refreshed:", token);
-        await fetch(`${API_BASE_URL}/register-token`, {
+        await fetch(`${API_BASE_URL}/location/register-token`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ regNo, fcmToken: token }),
-        });
+        })
+        .then((res)=>res.json())
+        .then((data)=>(console.log(data)));
       });
     } catch (error) {
       console.error("❌ Error registering device:", error);
     }
-  };
-
-  // 🔹 Setup FCM Listeners
-  const setupListeners = async () => {
-    try {
-      await requestPermission(messaging);
-      await registerDeviceForRemoteMessages(messaging);
-
-      // Foreground message
-      onMessage(messaging, async (remoteMessage) => {
-        console.log("📩 Foreground FCM:", remoteMessage);
-        showAlertModal(remoteMessage);
-      });
-
-      // Background opened
-      onNotificationOpenedApp(messaging, (remoteMessage) => {
-        console.log("📬 Notification opened from background:", remoteMessage);
-        showAlertModal(remoteMessage);
-      });
-
-      // From killed state
-      const initialMessage = await getInitialNotification(messaging);
-      if (initialMessage) {
-        console.log("🚀 Opened from killed state:", initialMessage);
-        showAlertModal(initialMessage);
-      }
-    } catch (err) {
-      console.error("🔥 FCM setup error:", err);
-    }
-  };
-
-  // 🔹 Show emergency alert modal
-  const showAlertModal = (remoteMessage) => {
-    setCurrentMessage(remoteMessage);
-    setShowModal(true);
-  };
-
-  const handleAcknowledge = () => {
-    console.log("User acknowledged alert");
-    // Add any custom action here
-    setShowModal(false);
   };
 
   // 🔹 Fetch user info
@@ -165,62 +138,46 @@ const Home = () => {
   }
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: isDark ? "#121212" : "#fff" }]}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <Header />
 
-        {/* User Info */}
-        <View style={styles.row}>
-          {user?.face_url ? (
-            <Image source={{ uri: user.face_url }} style={styles.avatar} />
-          ) : (
-            <Icon name="person" size={50} color={isDark ? "#fff" : "#2C3E50"} />
-          )}
-          <View style={styles.userInfo}>
-            <Text style={[styles.name, { color: isDark ? "#fff" : "#2C3E50" }]}>
-              {user?.name || "Guest User"}
-            </Text>
-            <Text
-              style={[
-                styles.studentId,
-                { color: isDark ? "#aaa" : "#7F8C8D" },
-              ]}
-            >
-              Register No: {user?.reg_no || "N/A"}
-            </Text>
-          </View>
-        </View>
+    <ScrollView contentContainerStyle={styles.scrollContainer} style={{ backgroundColor: isDark ? "#121212" : "#FFFFFF" }}>
+      <Header />
 
-        {/* Location Tracking */}
-        <View style={styles.track}>
-          <Icon
-            name="my-location"
-            size={28}
-            color={isDark ? "#FF6B6B" : "#E74C3C"}
-          />
-          <Text style={[styles.title, { color: isDark ? "#fff" : "#2C3E50" }]}>
-            Location Tracking
+      {/* User Info */}
+      <View style={styles.row}>
+        {user?.face_url ? (
+          <Image source={{ uri: user.face_url }} style={styles.avatar} />
+        ) : (
+          <Icon name="person" size={50} color={isDark ? "#fff" : "#2C3E50"} />
+        )}
+        <View style={styles.userInfo}>
+          <Text style={[styles.name, { color: isDark ? "#fff" : "#2C3E50" }]}>
+            {user?.name || "Guest User"}
+          </Text>
+          <Text
+            style={[
+              styles.studentId,
+              { color: isDark ? "#aaa" : "#7F8C8D" },
+            ]}
+          >
+            Register No: {user?.reg_no || "N/A"}
           </Text>
         </View>
-        <AutoLocationTracker />
-      </ScrollView>
+      </View>
 
-      {/* Emergency Alert Modal */}
-      <Modal transparent visible={showModal} animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>⚠️ Verification</Text>
-            <Text style={styles.modalMessage}>You are now leaving from the campus.{"\n\n"}
-            This verification ensures that your exit is recorded for safety and monitoring purposes.</Text>
-            <TouchableOpacity style={styles.button} onPress={handleAcknowledge}>
-              <Text style={styles.buttonText}>ACKNOWLEDGE</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+      {/* Location Tracking */}
+      <View style={styles.track}>
+        <Icon
+          name="my-location"
+          size={28}
+          color={isDark ? "#FF6B6B" : "#E74C3C"}
+        />
+        <Text style={[styles.title, { color: isDark ? "#fff" : "#2C3E50" }]}>
+          Location Tracking
+        </Text>
+      </View>
+      <AutoLocationTracker />
+    </ScrollView>
+
   );
 };
 
@@ -253,11 +210,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 20,
     alignItems: "center",
-    flex:0.5,
-    justifyContent:"space-evenly"
+    flex: 0.5,
+    justifyContent: "space-evenly"
   },
-  modalTitle: { fontSize: 24, fontWeight: "bold", marginBottom: 10, color:"red" },
-  modalMessage: { fontSize: 18, marginBottom: 20, textAlign: "center", color:"red" },
+  modalTitle: { fontSize: 24, fontWeight: "bold", marginBottom: 10, color: "red" },
+  modalMessage: { fontSize: 18, marginBottom: 20, textAlign: "center", color: "red" },
   button: {
     width: "100%",
     backgroundColor: "green",

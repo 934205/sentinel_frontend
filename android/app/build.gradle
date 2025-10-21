@@ -129,9 +129,7 @@ dependencies {
         implementation jscFlavor
     }
 
-    implementation(project(':react-native-push-notification')) {
-    exclude group: 'com.android.support'
-    }
+    
 
     // for kt track
     implementation 'com.google.android.gms:play-services-location:21.0.1'
