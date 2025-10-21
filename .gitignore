@@ -77,3 +77,4 @@ yarn-error.log
 
 *.env
 "code/services/SupabaseClient.js" 
+"android/app/google-services.json" 
