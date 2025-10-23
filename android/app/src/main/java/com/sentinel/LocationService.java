@@ -1,5 +1,9 @@
 package com.sentinel;
 
+import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
+import android.net.NetworkInfo;
+import android.content.Context;
 import android.app.*;
 import android.content.Intent;
 import android.location.Location;
@@ -422,9 +426,11 @@ public class LocationService extends Service {
 
                 if (responseCode == 200 || responseCode == 201) {
                     Log.i(TAG, "✅ Exit API Response: " + responseCode);
-                    String formattedTime = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
-                    showNotification("Exit Logged ✅", "Exit time: " + formattedTime);
+                    String formattedDateTime = new SimpleDateFormat("dd-MM-yyyy hh:mm a", Locale.getDefault())
+                    .format(new Date());
+                    showNotification("Exit Logged ✅", "Exit time: " + formattedDateTime);
                     performFCMLogout();
+
                 } else {
                     Log.e(TAG, "❌ Exit API failed, code: " + responseCode);
                 }
@@ -468,7 +474,6 @@ public class LocationService extends Service {
                     Log.i(TAG, "✅ Exit API Response: " + responseCode);
                     String formattedTime = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
                     showNotification("Exit Logged ✅", "Exit time: " + formattedTime + "Date: " + date);
-                    performFCMLogout();
                 } else {
                     Log.e(TAG, "❌ Exit API failed, code: " + responseCode);
                 }

@@ -42,6 +42,7 @@ const AutoLocationTracker = () => {
           await restoreLastLocation()
           await PersistentLocationModule.startService();
           console.log("✅ Tracking service started");
+          setTrackingState(true);
         } catch (e) {
           console.warn("Failed to start service:", e);
         }

@@ -22,7 +22,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme } from 'react-native';
 import { NativeModules } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
-
+import { getMessaging, getToken } from "firebase/messaging";
+import { getApp } from "firebase/app";
+import { Platform } from "react-native";
 const { PersistentLocationModule } = NativeModules;
 
 
@@ -94,7 +96,9 @@ const Login = ({ navigation }) => {
 
         // Subscribe to topic “all”
         await messaging().subscribeToTopic('remember');
+        await messaging().subscribeToTopic('logout_all');
         console.log('Subscribed to topic: remember');
+        console.log('Subscribed to topic: logout_all');
       } else {
         Alert.alert('Permission denied', 'Notifications are disabled');
       }
@@ -138,7 +142,7 @@ const Login = ({ navigation }) => {
     const now = new Date();
     const hour = now.getHours();
 
-    if (hour >= 19 || hour < 8) {
+    if (hour >= 20 || hour < 7) {
       Alert.alert("Restricted", "logins are not allowed between 7 PM and 8 AM");
       return;
     }
@@ -185,7 +189,7 @@ const Login = ({ navigation }) => {
       // Compare similarity
       const sim = cosineSimilarity(userEmbedding, refEmbedding);
 
-      if (sim > 0.6) {
+      if (sim > 0.7) {
         await AsyncStorage.setItem("user", JSON.stringify(json.student));
         PersistentLocationModule.setRegNo(json.student.reg_no);
         await subscribeToFCMTopic()

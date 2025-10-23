@@ -14,7 +14,7 @@ public class Config {
 
 
     public static final float ACCURACY_THRESHOLD = 50f;
-    public static final float MIN_DISTANCE_METERS = 2f;
+    public static final float MIN_DISTANCE_METERS = 10f;
     public static final float MAX_JUMP_DISTANCE = 500f;
 
     // Triangle points for geofence

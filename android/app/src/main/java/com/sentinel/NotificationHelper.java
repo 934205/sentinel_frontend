@@ -36,7 +36,6 @@ public class NotificationHelper {
     private static final Map<Long, MediaPlayer> mediaPlayers = new HashMap<>();
     public static final String TAG = "LocationService";
 
-
     public static void showNotification(Context context, String title, String message, long timestamp) {
         String channelId = "persistent_channel_" + timestamp;
         createChannel(context, channelId);
@@ -107,12 +106,14 @@ public class NotificationHelper {
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build();
 
-            NotificationChannel channel = new NotificationChannel(channelId, "Persistent Alert", NotificationManager.IMPORTANCE_HIGH);
+            NotificationChannel channel = new NotificationChannel(channelId, "Persistent Alert",
+                    NotificationManager.IMPORTANCE_HIGH);
             channel.enableVibration(false);
             channel.setSound(soundUri, audioAttributes);
 
             NotificationManager manager = context.getSystemService(NotificationManager.class);
-            if (manager != null) manager.createNotificationChannel(channel);
+            if (manager != null)
+                manager.createNotificationChannel(channel);
         }
     }
 
@@ -120,16 +121,16 @@ public class NotificationHelper {
         @Override
         public void onReceive(Context context, Intent intent) {
             long timestamp = intent.getLongExtra("timestamp", -1);
-            if (timestamp == -1) return;
+            if (timestamp == -1)
+                return;
 
             // Get reg_no stored from SharedPreferences (React Native side)
             SharedPreferences prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
             String regNo = prefs.getString("reg_no", null);
-            Log.d("LocationService",regNo);
-            
+            Log.d("LocationService", regNo);
 
             if (regNo != null) {
-                Log.d("LocationService","helllo");
+                Log.d("LocationService", "helllo");
                 sendOpenedStatusToServer(timestamp, regNo);
             }
 
@@ -173,16 +174,16 @@ public class NotificationHelper {
                 } catch (Exception e) {
                     e.printStackTrace();
                 } finally {
-                    if (conn != null) conn.disconnect();
+                    if (conn != null)
+                        conn.disconnect();
                 }
             }).start();
         }
 
     }
 
-
     public static void showPersistentInputNotification(Context context, String title, String message,
-                                                   long timestamp, String replyKey, String name) {
+            long timestamp, String replyKey, String name) {
 
         String channelId = "persistent_input_channel_" + timestamp;
         createPersistentChannel(context, channelId);
@@ -219,7 +220,7 @@ public class NotificationHelper {
                 .setAutoCancel(true)
                 .addAction(action)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setVibrate(new long[]{0, 500, 200, 500});
+                .setVibrate(new long[] { 0, 500, 200, 500 });
 
         NotificationManagerCompat manager = NotificationManagerCompat.from(context);
         manager.notify((int) timestamp, builder.build());
@@ -254,13 +255,19 @@ public class NotificationHelper {
                     Log.i("ALERT", "⏰ 1 minute passed — stopped sound automatically.");
                 }
                 manager.cancel((int) timestamp); // remove notification
+                if ("afternoon".equals(name)) {
+                    Intent intent = new Intent(context, LocationService.class);
+                    context.stopService(intent);
+                    SharedPreferences prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+                    prefs.edit().putBoolean("isLogout", true).apply();
+                    Log.i(TAG, "Foreground service stopped for afternoon alert.");
+                }
             }, 60_000); // 1 minute = 60000 ms
 
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
-
 
     private static void createPersistentChannel(Context context, String channelId) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -274,18 +281,17 @@ public class NotificationHelper {
             NotificationChannel channel = new NotificationChannel(
                     channelId,
                     "Persistent Input Alert",
-                    NotificationManager.IMPORTANCE_HIGH
-            );
+                    NotificationManager.IMPORTANCE_HIGH);
 
             channel.enableVibration(true);
-            channel.setVibrationPattern(new long[]{0, 500, 200, 500}); // same as alert
+            channel.setVibrationPattern(new long[] { 0, 500, 200, 500 }); // same as alert
             channel.setSound(soundUri, audioAttributes);
 
             NotificationManager manager = context.getSystemService(NotificationManager.class);
-            if (manager != null) manager.createNotificationChannel(channel);
+            if (manager != null)
+                manager.createNotificationChannel(channel);
         }
     }
-
 
     public static class NotificationInputReceiver extends BroadcastReceiver {
         @Override
@@ -296,13 +302,21 @@ public class NotificationHelper {
             String name = intent.getStringExtra("name");
 
             SharedPreferences prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
-            String regNo = prefs.getString("reg_no", null);
+            String regNo;
+
+            if ("afternoon".equals(name)) {
+                SharedPreferences noDeletePrefs = context.getSharedPreferences("no_delete_user_prefs",
+                        Context.MODE_PRIVATE);
+                regNo = noDeletePrefs.getString("reg_no", null);
+            } else {
+                regNo = prefs.getString("reg_no", null);
+            }
 
             if (timestamp != -1 && replyKey != null) {
                 Bundle remoteInput = RemoteInput.getResultsFromIntent(intent);
                 if (remoteInput != null) {
                     CharSequence reply = remoteInput.getCharSequence(replyKey);
-                    
+
                     if (reply != null) {
                         String replyText = reply.toString();
 
@@ -322,10 +336,11 @@ public class NotificationHelper {
 
                         sendReplyToServer(context, replyText, timestamp, regNo, name);
                     } else {
-                         Log.e(TAG, "Reply was null for key: " + replyKey);
+                        Log.e(TAG, "Reply was null for key: " + replyKey);
+
                     }
                 } else {
-                     Log.e(TAG, "RemoteInput bundle was null.");
+                    Log.e(TAG, "RemoteInput bundle was null.");
                 }
             }
         }
@@ -338,9 +353,9 @@ public class NotificationHelper {
                     obj.put("reg_no", regNo);
                     obj.put("reply", replyText);
                     obj.put("timestamp", String.valueOf(timestamp));
-                    obj.put("name",name);
+                    obj.put("name", name);
 
-                    Log.d("LocationService",regNo+replyText+timestamp+name);
+                    Log.d("LocationService", regNo + replyText + timestamp + name);
 
                     URL url = new URL(Config.ALERT_REPLY_API);
                     conn = (HttpURLConnection) url.openConnection();
@@ -358,7 +373,14 @@ public class NotificationHelper {
                     }
 
                     int responseCode = conn.getResponseCode();
-                    Log.i("HTTP", "Response code: " + responseCode);
+                    Log.i("LocationService", "Response code: " + responseCode);
+                    if ("afternoon".equals(name)) {
+                        Intent intent = new Intent(context, LocationService.class);
+                        context.stopService(intent);
+                        SharedPreferences prefs = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+                        prefs.edit().putBoolean("isLogout", true).apply();
+                        Log.i(TAG, "Foreground service stopped for afternoon alert.");
+                    }
                 } catch (Exception e) {
                     Log.e(TAG, "Exception sending reply", e);
                 }
@@ -366,4 +388,3 @@ public class NotificationHelper {
         }
     }
 }
-

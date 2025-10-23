@@ -45,6 +45,8 @@ public class PersistentLocationModule extends ReactContextBaseJavaModule {
     public void setRegNo(String regNo) {
         SharedPreferences prefs = reactContext.getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
         prefs.edit().putString("reg_no", regNo).apply();
+        SharedPreferences no_delete_prefs = reactContext.getSharedPreferences("no_delete_user_prefs", Context.MODE_PRIVATE);
+        no_delete_prefs.edit().putString("reg_no", regNo).apply();
     }
 
     @ReactMethod
