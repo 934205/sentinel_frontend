@@ -234,7 +234,11 @@ public class LocationService extends Service {
         // ... (rest of API calls)
         if (inside && !wasInside) {
 
-            sendLocationToJS(latitude, longitude, inside, "-");
+            String entryTime = new SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                    .format(new Date());
+            sharedPreferences.edit().putString("entryTime", entryTime).apply();
+
+            sendLocationToJS(latitude, longitude, inside, entryTime);
 
             attemptEntry(regNo, latitude, longitude);
 
@@ -380,8 +384,9 @@ public class LocationService extends Service {
 
                 if (responseCode == 200 || responseCode == 201) {
                     Log.i(TAG, "✅ Entry API Response: " + responseCode);
-                    String formattedTime = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date());
-                    showNotification("Entry Logged ✅", "Entry time: " + formattedTime);
+                    String formattedDateTime = new SimpleDateFormat("dd-MM-yyyy hh:mm a", Locale.getDefault())
+                            .format(new Date());
+                    showNotification("Entry Logged ✅", "Entry time: " + formattedDateTime);
                 } else {
                     Log.e(TAG, "❌ Entry API failed, code: " + responseCode);
                 }
@@ -427,7 +432,7 @@ public class LocationService extends Service {
                 if (responseCode == 200 || responseCode == 201) {
                     Log.i(TAG, "✅ Exit API Response: " + responseCode);
                     String formattedDateTime = new SimpleDateFormat("dd-MM-yyyy hh:mm a", Locale.getDefault())
-                    .format(new Date());
+                            .format(new Date());
                     showNotification("Exit Logged ✅", "Exit time: " + formattedDateTime);
                     performFCMLogout();
 

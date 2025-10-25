@@ -142,7 +142,7 @@ const Login = ({ navigation }) => {
     const now = new Date();
     const hour = now.getHours();
 
-    if (hour >= 20 || hour < 7) {
+    if (hour >= 19 || hour < 8) {
       Alert.alert("Restricted", "logins are not allowed between 7 PM and 8 AM");
       return;
     }

@@ -14,9 +14,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-
-
 
 
     <application
@@ -110,11 +107,6 @@
         <meta-data
             android:name="com.dieam.reactnativepushnotification.default_notification_icon"
             android:resource="@drawable/ic_notification"/>
-
-        
-        <service android:name="com.transistorsoft.rnbackgroundfetch.HeadlessTask"/>
-
-
 
         <service android:name=".PersistentLocationService" android:foregroundServiceType="location"/>
     
